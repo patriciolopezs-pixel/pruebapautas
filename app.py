@@ -108,6 +108,13 @@ def parse_fecha(fecha_str):
     return datetime.date.today()
 
 
+def clean_text_spaces(text):
+    if not text:
+        return ""
+    cleaned = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s\.]', '', str(text))
+    return re.sub(r'\s+', ' ', cleaned).strip().upper()
+
+
 # --- LÓGICA DE CARGA MASIVA PAUSA DENTAL ---
 def procesar_df_masivo(df, fecha_sup_default):
     df.columns = [str(c).strip().lower() for c in df.columns]
@@ -126,14 +133,14 @@ def procesar_df_masivo(df, fecha_sup_default):
             break
         num_pauta = count + 1
         
-        centro_val = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', get_val(row, ['centro'])).strip().upper()
+        centro_val = clean_text_spaces(get_val(row, ['centro']))
         rut_val = re.sub(r'[^0-9kK\-]', '', get_val(row, ['rut paciente', 'rut_paciente'])).strip().upper()
         
         nom_prof = get_val(row, ['nombre profesional', 'nombre realizador', 'nombre persona'])
         ape_prof = get_val(row, ['apellidos profesional', 'apellido realizador', 'apellidos persona', 'apellido persona'])
         
-        nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nom_prof).strip().upper()
-        apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', ape_prof).strip().upper()
+        nombre_clean = clean_text_spaces(nom_prof)
+        apellido_clean = clean_text_spaces(ape_prof)
         
         fecha_atencion_raw = get_val(row, ['fecha de ejecución', 'fecha atencion', 'fecha_atencion', 'fecha'])
         try:
@@ -340,7 +347,7 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     navy_header_fill = PatternFill(start_color="00205B", end_color="00205B", fill_type="solid")
     soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
 
-    # Encabezado
+    # Encabezado principal
     ws.merge_cells('A1:M1')
     ws['A1'] = "GCL 1.2 PAUTA SUPERVISIÓN DE HIGIENE DE MANOS - ÁREA DENTAL"
     ws['A1'].font = bold_font_white
@@ -357,7 +364,7 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     ws['B4'] = mes
     ws['B4'].alignment = left_aligned
 
-    # Filas generales (5 a 8)
+    # Filas de datos generales (5 a 8)
     ws.cell(row=5, column=1, value="Número correlativo").font = bold_font_navy
     ws.cell(row=6, column=1, value="Fecha de la evaluación").font = bold_font_navy
     ws.cell(row=7, column=1, value="Nombre del evaluador").font = bold_font_navy
@@ -400,7 +407,7 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
             if cumple == "SI":
                 total_cumple += 1
 
-    # Leyenda Oportunidades (Filas 14 a 19)
+    # Leyenda Oportunidades (Filas 14 a 19 - Solo Cols A a E)
     ws.merge_cells('A14:E14')
     ws['A14'] = "Oportunidades de lavado de manos"
     ws['A14'].font = bold_font_navy
@@ -417,7 +424,7 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
         ws.merge_cells(start_row=i, start_column=1, end_row=i, end_column=5)
         ws.cell(row=i, column=1, value=ley).alignment = left_aligned
 
-    # Bloque de Resumen (Filas 21 a 23)
+    # Bloque de Resumen (Filas 21 a 23 - Solo Cols A y B)
     ws.cell(row=21, column=1, value="Total de pautas que cumplen criterios").font = bold_font_navy
     ws.cell(row=21, column=2, value=total_cumple).alignment = center_aligned
 
@@ -433,11 +440,41 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     ws['B25'] = responsable
     ws['B25'].alignment = left_aligned
 
-    # Aplicar Bordes
-    for r in range(1, 26):
+    # APLICACIÓN DELIMITADA DE BORDES (RESPETANDO ESPACIOS EN BLANCO)
+    # 1. Encabezado principal (R1)
+    for c in range(1, 14):
+        ws.cell(row=1, column=c).border = thin_border
+
+    # 2. Centro y Mes (R3, R4)
+    ws.cell(row=3, column=1).border = thin_border
+    ws.cell(row=3, column=2).border = thin_border
+    ws.cell(row=4, column=1).border = thin_border
+    ws.cell(row=4, column=2).border = thin_border
+
+    # 3. Tabla principal de datos (R5 a R8, Cols 1 a 13)
+    for r in range(5, 9):
         for c in range(1, 14):
-            if r not in [2, 9, 13, 20, 24]:
-                ws.cell(row=r, column=c).border = thin_border
+            ws.cell(row=r, column=c).border = thin_border
+
+    # 4. Tabla de Criterios (R10 a R12, Cols 1 a 13)
+    for r in range(10, 13):
+        for c in range(1, 14):
+            ws.cell(row=r, column=c).border = thin_border
+
+    # 5. Leyendas (R14 a R19, solo Cols A a E / 1 a 5)
+    for r in range(14, 20):
+        for c in range(1, 6):
+            ws.cell(row=r, column=c).border = thin_border
+
+    # 6. Totales (R21 a R23, solo Cols A y B / 1 y 2)
+    for r in range(21, 24):
+        for c in range(1, 3):
+            ws.cell(row=r, column=c).border = thin_border
+
+    # 7. Responsable (R25, solo Cols A a E / 1 a 5)
+    ws.cell(row=25, column=1).border = thin_border
+    for c in range(2, 6):
+        ws.cell(row=25, column=c).border = thin_border
 
     output = io.BytesIO()
     wb.save(output)
@@ -567,17 +604,17 @@ elif st.session_state.pagina_activa == "pauta_dental":
 
     if st.button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True, key=f"btn_{p_num}"):
         st.session_state.pautas_data[p_num] = {
-            "centro": centro.strip().upper(),
+            "centro": clean_text_spaces(centro),
             "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
-            "nombre": re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre).strip().upper(),
-            "apellido": re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', apellido).strip().upper(),
+            "nombre": clean_text_spaces(nombre),
+            "apellido": clean_text_spaces(apellido),
             "rut": re.sub(r'[^0-9kK\-]', '', rut).strip().upper(),
             "fecha_atencion": fecha_atencion.strftime("%d-%m-%Y"),
             "servicio": servicio,
             "exodoncia": exodoncia,
             "cumple": cumple
         }
-        st.session_state.ultimo_centro = centro.strip().upper()
+        st.session_state.ultimo_centro = clean_text_spaces(centro)
         if p_num < 18:
             st.session_state.pauta_actual = p_num + 1
         st.rerun()
@@ -605,14 +642,13 @@ elif st.session_state.pagina_activa == "pauta_higiene":
     st.markdown("---")
     st.title("RedSalud | Higiene de Manos - Área Dental (GCL 1.2)")
 
-    # Datos Generales del Mes
     col1, col2 = st.columns(2)
     with col1:
-        st.session_state.centro_higiene = st.text_input("Centro Dental", value=st.session_state.centro_higiene).upper()
+        st.session_state.centro_higiene = clean_text_spaces(st.text_input("Centro Dental", value=st.session_state.centro_higiene))
     with col2:
-        st.session_state.mes_higiene = st.text_input("Mes de Evaluación", value=st.session_state.mes_higiene).upper()
+        st.session_state.mes_higiene = clean_text_spaces(st.text_input("Mes de Evaluación", value=st.session_state.mes_higiene))
 
-    st.session_state.responsable_higiene = st.text_input("Nombre de responsable del indicador", value=st.session_state.responsable_higiene).upper()
+    st.session_state.responsable_higiene = clean_text_spaces(st.text_input("Nombre de responsable del indicador", value=st.session_state.responsable_higiene))
 
     st.markdown("---")
     completadas_h = sum(1 for v in st.session_state.higiene_data.values() if v is not None)
@@ -656,12 +692,12 @@ elif st.session_state.pagina_activa == "pauta_higiene":
     if st.button(f"💾 Guardar Evaluación N° {h_num}", type="primary", use_container_width=True, key=f"btn_h_{h_num}"):
         st.session_state.higiene_data[h_num] = {
             "fecha_eval": fecha_eval.strftime("%d/%m"),
-            "evaluador": re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s\.]', '', evaluador).strip().upper(),
-            "evaluado": re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s\.]', '', evaluado).strip().upper(),
+            "evaluador": clean_text_spaces(evaluador),
+            "evaluado": clean_text_spaces(evaluado),
             "oportunidad": op_sel,
             "cumple": cumple_h
         }
-        st.session_state.evaluador_higiene = evaluador.strip().upper()
+        st.session_state.evaluador_higiene = clean_text_spaces(evaluador)
         if h_num < 12:
             st.session_state.higiene_actual = h_num + 1
         st.rerun()
