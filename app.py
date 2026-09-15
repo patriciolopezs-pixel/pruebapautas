@@ -5,7 +5,7 @@ from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 import io
 
 # Configuración de la página web
-st.set_page_config(page_title="Pautas de Supervisión Dental", layout="wide")
+st.set_page_config(page_title="Pautas de Supervisión Dental", layout="centered")
 
 # Inicializar variables en sesión para guardar las 18 pautas
 if 'pautas' not in st.session_state:
@@ -22,7 +22,7 @@ def generar_excel_consolidado(pautas):
     center_aligned_text = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left_aligned_text = Alignment(horizontal="left", vertical="center", wrap_text=True)
     bold_font = Font(bold=True)
-    blue_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid") # Color similar al de la imagen
+    blue_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
 
     # 1. Títulos y Encabezados
     ws.merge_cells('A1:AK1')
@@ -50,7 +50,6 @@ def generar_excel_consolidado(pautas):
         ws.cell(row=i, column=1).alignment = left_aligned_text
         ws.cell(row=i, column=1).fill = blue_fill
 
-    # Ancho de la columna A para que quepa el texto
     ws.column_dimensions['A'].width = 50
 
     # 3. Filas de Criterios (Columna A)
@@ -69,10 +68,9 @@ def generar_excel_consolidado(pautas):
     total_no_cumple = 0
 
     for idx in range(18):
-        col_start = 2 + (idx * 2) # Pauta 1 empieza en B(2), Pauta 2 en D(4), etc.
+        col_start = 2 + (idx * 2)
         col_end = col_start + 1
 
-        # Combinar celdas superiores e insertar datos (si la pauta fue ingresada)
         pauta_data = pautas[idx] if idx < len(pautas) else {}
 
         campos = ["centro", "fecha_sup", "nombre", "apellido", "rut", "fecha_atencion", "servicio", "exodoncia"]
@@ -81,15 +79,12 @@ def generar_excel_consolidado(pautas):
             ws.cell(row=row_idx, column=col_start, value=pauta_data.get(campo, ""))
             ws.cell(row=row_idx, column=col_start).alignment = center_aligned_text
 
-        # N° de Pauta
         ws.merge_cells(start_row=11, start_column=col_start, end_row=11, end_column=col_end)
         ws.cell(row=11, column=col_start, value=idx + 1).alignment = center_aligned_text
 
-        # SI / NO
         ws.cell(row=12, column=col_start, value="SI").alignment = center_aligned_text
         ws.cell(row=12, column=col_end, value="NO").alignment = center_aligned_text
 
-        # Marcado de Cumplimiento
         cumple = pauta_data.get("cumple", "")
         if cumple == "SI":
             ws.cell(row=14, column=col_start, value="X").alignment = center_aligned_text
@@ -98,7 +93,7 @@ def generar_excel_consolidado(pautas):
             ws.cell(row=14, column=col_end, value="X").alignment = center_aligned_text
             total_no_cumple += 1
 
-    # 5. Totales e indicadores finales (emulando la fila 15 de la imagen)
+    # 5. Totales
     ws.merge_cells('B15:C15')
     ws['B15'] = total_cumple
     ws['B15'].alignment = center_aligned_text
@@ -120,57 +115,50 @@ def generar_excel_consolidado(pautas):
     ws['K15'] = porcentaje
     ws['K15'].alignment = center_aligned_text
 
-    # Aplicar bordes a todo el rango utilizado
     for row in ws.iter_rows(min_row=1, max_row=16, min_col=1, max_col=37):
         for cell in row:
             cell.border = thin_border
 
-    # Guardar a memoria para la descarga
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
     return output
 
 
-# --- INTERFAZ WEB DE STREAMLIT ---
-st.title("🦷 Plataforma de Consolidación: Pausa de Seguridad Dental")
-st.write("Complete el formulario para las 18 pautas. Al finalizar, podrá descargar el Excel consolidado.")
+# --- INTERFAZ WEB RESPONSIVA ---
+st.title("🦷 Pausa de Seguridad Dental")
+st.write("Complete el formulario para las 18 pautas de supervisión.")
 
 pautas_ingresadas = len(st.session_state.pautas)
 
-# Mostrar progreso
 st.progress(pautas_ingresadas / 18)
-st.write(f"**Pautas ingresadas:** {pautas_ingresadas} de 18")
+st.caption(f"Pautas ingresadas: **{pautas_ingresadas} de 18**")
 
 if pautas_ingresadas < 18:
-    st.subheader(f"Ingresando Pauta N° {pautas_ingresadas + 1}")
+    st.subheader(f"Pauta N° {pautas_ingresadas + 1}")
     
+    # Formulario alineado en una sola columna vertical para móviles
     with st.form("form_pauta", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            centro = st.text_input("Centro")
-            nombre = st.text_input("Nombre de la persona supervisada")
-            rut = st.text_input("RUT del paciente")
-            servicio = st.selectbox("Servicio Clínico", [
-                "Sala de Procedimiento Dental (BD)", 
-                "Pabellón de Cirugía menor Dental (PD)", 
-                "Imagenología Dental (RX)"
-            ])
-        
-        with col2:
-            fecha_sup = st.date_input("Fecha de Supervisión")
-            apellido = st.text_input("Apellido(s) de la persona supervisada")
-            fecha_atencion = st.date_input("Fecha de Atención supervisada")
-            exodoncia = st.radio("Procedimiento corresponde a Exodoncia", ["SI", "NO"], horizontal=True)
+        centro = st.text_input("Centro")
+        fecha_sup = st.date_input("Fecha de Supervisión")
+        nombre = st.text_input("Nombre de la persona supervisada")
+        apellido = st.text_input("Apellido(s) de la persona supervisada")
+        rut = st.text_input("RUT del paciente")
+        fecha_atencion = st.date_input("Fecha de Atención supervisada")
+        servicio = st.selectbox("Servicio Clínico", [
+            "Sala de Procedimiento Dental (BD)", 
+            "Pabellón de Cirugía menor Dental (PD)", 
+            "Imagenología Dental (RX)"
+        ])
+        exodoncia = st.radio("¿Procedimiento corresponde a Exodoncia?", ["SI", "NO"])
 
         st.markdown("---")
-        st.markdown("### CRITERIOS A EVALUAR")
-        cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica?", ["SI", "NO"], horizontal=True)
+        st.markdown("**CRITERIO A EVALUAR**")
+        cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica?", ["SI", "NO"])
 
-        btn_guardar = st.form_submit_button("Guardar Pauta", type="primary")
+        btn_guardar = st.form_submit_button("Guardar Pauta", type="primary", use_container_width=True)
 
         if btn_guardar:
-            # Guardamos los datos en el estado de la sesión
             st.session_state.pautas.append({
                 "centro": centro,
                 "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
@@ -182,19 +170,20 @@ if pautas_ingresadas < 18:
                 "exodoncia": exodoncia,
                 "cumple": cumple
             })
-            st.rerun() # Recarga la página para mostrar la siguiente pauta
+            st.rerun()
 else:
-    st.success("✅ ¡Se han ingresado las 18 pautas satisfactoriamente!")
+    st.success("✅ ¡Se han completado las 18 pautas!")
     
     excel_file = generar_excel_consolidado(st.session_state.pautas)
     
     st.download_button(
-        label="📥 Descargar Documento Consolidado (Excel)",
+        label="📥 Descargar Excel Consolidado",
         data=excel_file,
         file_name="Consolidado_Pausa_Seguridad_Dental.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
     )
 
-    if st.button("Reiniciar / Crear un nuevo consolidado"):
+    if st.button("Reiniciar y crear nuevo consolidado", use_container_width=True):
         st.session_state.pautas = []
         st.rerun()
