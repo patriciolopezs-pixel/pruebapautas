@@ -4,11 +4,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 import io
 import datetime
+import re  # Módulo para filtrado de texto
 
 # Configuración de la página web
 st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="centered")
 
-# --- ESTILOS CSS LIMPIOS (SIN CORRUPCIÓN DE ÍCONOS) ---
+# --- ESTILOS CSS CON MAYÚSCULAS AUTOMÁTICAS ---
 st.markdown("""
 <style>
     /* Fondo global */
@@ -28,13 +29,14 @@ st.markdown("""
         color: #00205B !important;
     }
 
-    /* Campos de entrada, selects y fechas */
+    /* Campos de entrada: Forzar visualización en MAYÚSCULAS */
     input, select, textarea, div[data-baseweb="select"] {
         background-color: #FFFFFF !important;
         color: #00205B !important;
         -webkit-text-fill-color: #00205B !important;
         border: 1px solid #CBD5E1 !important;
         border-radius: 8px !important;
+        text-transform: uppercase !important; /* Escribe en Mayúsculas visualmente */
     }
 
     /* Contenedor del Formulario (Tarjeta Blanca) */
@@ -266,7 +268,7 @@ with st.form(key=f"form_pauta_numero_{p_num}"):
     fecha_sup = st.date_input("Fecha de Supervisión", value=parse_fecha(datos_existentes.get('fecha_sup')))
     nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''))
     apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''))
-    rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''))
+    rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), help="Formato: 12345678-K (sin puntos)")
     fecha_atencion = st.date_input("Fecha de Atención supervisada", value=parse_fecha(datos_existentes.get('fecha_atencion')))
     servicio = st.selectbox("Servicio Clínico", servicios, index=idx_serv)
     exodoncia = st.radio("¿Procedimiento corresponde a Exodoncia?", ["SI", "NO"], index=idx_exo)
@@ -278,18 +280,27 @@ with st.form(key=f"form_pauta_numero_{p_num}"):
     btn_guardar = st.form_submit_button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True)
 
     if btn_guardar:
+        # --- LIMPIEZA Y VALIDACIÓN DE DATOS ---
+        # 1. Nombre y Apellido: Solo letras, espacios, acentos y Ñ, convertidos a MAYÚSCULAS
+        nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre).strip().upper()
+        apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', apellido).strip().upper()
+        centro_clean = centro.strip().upper()
+        
+        # 2. RUT: Solo números, guion (-) y letra K/k (en mayúscula)
+        rut_clean = re.sub(r'[^0-9kK\-]', '', rut).strip().upper()
+
         st.session_state.pautas_data[p_num] = {
-            "centro": centro,
+            "centro": centro_clean,
             "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
-            "nombre": nombre,
-            "apellido": apellido,
-            "rut": rut,
+            "nombre": nombre_clean,
+            "apellido": apellido_clean,
+            "rut": rut_clean,
             "fecha_atencion": fecha_atencion.strftime("%d-%m-%Y"),
             "servicio": servicio,
             "exodoncia": exodoncia,
             "cumple": cumple
         }
-        st.session_state.ultimo_centro = centro
+        st.session_state.ultimo_centro = centro_clean
         
         if p_num < 18:
             st.session_state.pauta_actual = p_num + 1
@@ -308,7 +319,7 @@ excel_file = generar_excel_consolidado(st.session_state.pautas_data)
 st.download_button(
     label="📥 Descargar Excel Consolidado",
     data=excel_file,
-    file_name="Consolidado_Pausa_Seguridad_Dental_RedSalud.xlsx",
+    file_name="Consolidado_Pausa_Seguridad_Dental.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     use_container_width=True
 )
