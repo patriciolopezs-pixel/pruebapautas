@@ -39,7 +39,7 @@ st.markdown("""
         background-color: #00828A !important;
         border: none !important;
         border-radius: 8px !important;
-        margin-top: 15px;
+        margin-top: 10px;
     }
     button[kind="primary"] p {
         color: #FFFFFF !important;
@@ -83,13 +83,88 @@ if 'ultimo_centro' not in st.session_state:
 def parse_fecha(fecha_str):
     if fecha_str:
         try:
-            return datetime.datetime.strptime(fecha_str, "%d-%m-%Y").date()
+            return datetime.datetime.strptime(str(fecha_str).strip(), "%d-%m-%Y").date()
         except Exception:
-            pass
+            try:
+                return pd.to_datetime(fecha_str).date()
+            except Exception:
+                pass
     return datetime.date.today()
 
 
-# --- 2. GENERADOR EXCEL CONSOLIDADO ---
+# --- 2. LÓGICA DE CARGA MASIVA ---
+def procesar_df_masivo(df, fecha_sup_default):
+    # Normalizar encabezados
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    
+    def get_val(row, candidates, default=""):
+        for cand in candidates:
+            for col in df.columns:
+                if cand in col:
+                    val = str(row[col]).strip()
+                    return val if val != 'nan' and val != 'None' else default
+        return default
+
+    count = 0
+    for i, row in df.iterrows():
+        if count >= 18:
+            break
+        num_pauta = count + 1
+        
+        centro_val = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', get_val(row, ['centro'])).strip().upper()
+        rut_val = re.sub(r'[^0-9kK\-]', '', get_val(row, ['rut paciente', 'rut_paciente'])).strip().upper()
+        
+        # Nombre y Apellidos del profesional
+        nom_prof = get_val(row, ['nombre profesional', 'nombre realizador', 'nombre persona'])
+        ape_prof = get_val(row, ['apellidos profesional', 'apellido realizador', 'apellidos persona', 'apellido persona'])
+        
+        nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nom_prof).strip().upper()
+        apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', ape_prof).strip().upper()
+        
+        # Fecha de atención
+        fecha_atencion_raw = get_val(row, ['fecha de ejecución', 'fecha atencion', 'fecha_atencion', 'fecha'])
+        try:
+            fecha_atencion_clean = pd.to_datetime(fecha_atencion_raw).strftime("%d-%m-%Y")
+        except Exception:
+            fecha_atencion_clean = fecha_sup_default.strftime("%d-%m-%Y")
+            
+        # Servicio Clínico
+        serv_raw = get_val(row, ['servicio']).lower()
+        if 'pabell' in serv_raw or 'pd' in serv_raw:
+            serv_clean = "Pabellón de Cirugía menor Dental (PD)"
+        elif 'imagen' in serv_raw or 'rx' in serv_raw:
+            serv_clean = "Imagenología Dental (RX)"
+        else:
+            serv_clean = "Sala de Procedimiento Dental (BD)"
+            
+        # Exodoncia
+        exo_raw = get_val(row, ['exodoncia', 'prestación corresponde']).upper()
+        exo_clean = "SI" if "SI" in exo_raw else "NO"
+
+        # Mantener evaluación existente o predeterminar SI
+        cumple_existente = "SI"
+        if st.session_state.pautas_data[num_pauta] is not None:
+            cumple_existente = st.session_state.pautas_data[num_pauta].get("cumple", "SI")
+
+        st.session_state.pautas_data[num_pauta] = {
+            "centro": centro_val if centro_val else st.session_state.ultimo_centro,
+            "fecha_sup": fecha_sup_default.strftime("%d-%m-%Y"),
+            "nombre": nombre_clean,
+            "apellido": apellido_clean,
+            "rut": rut_val,
+            "fecha_atencion": fecha_atencion_clean,
+            "servicio": serv_clean,
+            "exodoncia": exo_clean,
+            "cumple": cumple_existente
+        }
+        if centro_val:
+            st.session_state.ultimo_centro = centro_val
+        count += 1
+
+    return count
+
+
+# --- 3. GENERADOR EXCEL CONSOLIDADO ---
 def generar_excel_consolidado(pautas_dict):
     wb = Workbook()
     ws = wb.active
@@ -111,7 +186,6 @@ def generar_excel_consolidado(pautas_dict):
     teal_sub_fill = PatternFill(start_color="00828A", end_color="00828A", fill_type="solid")
     soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
 
-    # Encabezado principal
     ws.merge_cells('A1:AK1')
     ws['A1'] = "PAUTA DE SUPERVISIÓN CUMPLIMIENTO DE PAUSA DE SEGURIDAD DENTAL EN BOX DENTAL, PABELLÓN DE CIRUGÍA MENOR DENTAL E IMAGENOLOGÍA DENTAL (GCL 2.1 AO)"
     ws['A1'].font = bold_font_white
@@ -124,7 +198,6 @@ def generar_excel_consolidado(pautas_dict):
     ws['A2'].font = bold_font_navy
     ws['B2'].alignment = center_aligned_text
 
-    # Etiquetas de filas
     etiquetas = [
         "Centro", 
         "Fecha de Supervisión", 
@@ -143,7 +216,6 @@ def generar_excel_consolidado(pautas_dict):
 
     ws.column_dimensions['A'].width = 50
 
-    # Criterios y headers
     ws.cell(row=11, column=1, value="N° DE PAUTA").font = bold_font_white
     ws.cell(row=11, column=1).fill = teal_sub_fill
     
@@ -162,7 +234,6 @@ def generar_excel_consolidado(pautas_dict):
     total_cumple = 0
     total_no_cumple = 0
 
-    # Llenado de pautas (Columnas B a AK)
     for idx in range(18):
         num_pauta = idx + 1
         col_start = 2 + (idx * 2)
@@ -200,7 +271,7 @@ def generar_excel_consolidado(pautas_dict):
         else:
             ws.merge_cells(start_row=14, start_column=col_start, end_row=14, end_column=col_end)
 
-    # Totales e Indicadores
+    # Totales
     ws.merge_cells('B15:F15')
     ws['B15'] = total_cumple
     ws['B15'].alignment = center_aligned_text
@@ -225,30 +296,26 @@ def generar_excel_consolidado(pautas_dict):
     ws['S15'] = porcentaje
     ws['S15'].alignment = center_aligned_text
 
-    # Observaciones y Timbre/Firma
+    # Observaciones y Timbre
     ws.merge_cells('A16:Q20')
     ws['A16'] = "Observaciones:"
     ws['A16'].font = bold_font_navy
     ws['A16'].alignment = Alignment(horizontal="left", vertical="top")
 
-    ws.merge_cells('R16:U18')  # Espacio en blanco para firma o timbre
+    ws.merge_cells('R16:U18')
 
     ws.merge_cells('R19:U20')
     ws['R19'] = "Nombre o Timbre\ndel responsable de\naplicar la pauta"
     ws['R19'].font = bold_font_navy
     ws['R19'].alignment = center_aligned_text
 
-    # Ajuste de altura para que el texto sea perfectamente legible
     ws.row_dimensions[19].height = 20
     ws.row_dimensions[20].height = 20
 
-    # Aplicación de bordes controlada (evita recuadros en blanco al final)
-    # 1. Tabla principal (Filas 1 a 15, todas las columnas)
     for r in range(1, 16):
         for c in range(1, 38):
             ws.cell(row=r, column=c).border = thin_border
 
-    # 2. Bloque inferior (Filas 16 a 20, solo hasta la columna U)
     for r in range(16, 21):
         for c in range(1, 22):
             ws.cell(row=r, column=c).border = thin_border
@@ -259,8 +326,49 @@ def generar_excel_consolidado(pautas_dict):
     return output
 
 
-# --- 3. INTERFAZ DE USUARIO ---
+# --- 4. INTERFAZ DE USUARIO ---
 st.title("RedSalud | Pausa de Seguridad Dental")
+
+# --- MÓDULO DE CARGA MASIVA (EXPANDER) ---
+with st.expander("📥 **Carga Masiva Mensual (Copiar y Pegar desde Excel / Archivo)**", expanded=False):
+    st.write("Copia la tabla desde Excel y pégala abajo, o sube el archivo directamente:")
+    
+    fecha_sup_masiva = st.date_input("Fecha de Supervisión para el lote:", value=datetime.date.today())
+    
+    tab1, tab2 = st.tabs(["📋 Pegar Texto desde Excel", "📁 Subir Archivo Excel/CSV"])
+    
+    with tab1:
+        texto_pegado = st.text_area("Pega la tabla copiada desde Excel aquí:", height=150, placeholder="Pega aquí las filas copiadas directamente de tu Excel...")
+        if st.button("⚡ Procesar Texto Pegado", type="primary"):
+            if texto_pegado.strip():
+                try:
+                    df_pasted = pd.read_csv(io.StringIO(texto_pegado), sep='\t')
+                    cargadas = procesar_df_masivo(df_pasted, fecha_sup_masiva)
+                    st.success(f"✅ ¡Se cargaron {cargadas} pautas automáticamente!")
+                    st.rerun()
+                except Exception as e:
+                    st.error("Ocurrió un error al leer el texto. Asegúrate de copiar las columnas completas desde Excel.")
+            else:
+                st.warning("Por favor pega algún texto antes de procesar.")
+                
+    with tab2:
+        archivo_subido = st.file_uploader("Selecciona archivo Excel (.xlsx) o CSV:", type=["xlsx", "csv"])
+        if st.button("⚡ Procesar Archivo Subido", type="primary"):
+            if archivo_subido is not None:
+                try:
+                    if archivo_subido.name.endswith('.csv'):
+                        df_file = pd.read_csv(archivo_subido)
+                    else:
+                        df_file = pd.read_excel(archivo_subido)
+                    cargadas = procesar_df_masivo(df_file, fecha_sup_masiva)
+                    st.success(f"✅ ¡Se cargaron {cargadas} pautas automáticamente!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al leer el archivo: {e}")
+            else:
+                st.warning("Selecciona un archivo antes de procesar.")
+
+st.markdown("---")
 
 completadas = sum(1 for v in st.session_state.pautas_data.values() if v is not None)
 
@@ -299,10 +407,10 @@ st.subheader(f"Formulario Pauta N° {p_num}")
 centro = st.text_input("Centro", value=datos_existentes.get('centro', st.session_state.ultimo_centro), key=f"c_{p_num}")
 fecha_sup = st.date_input("Fecha de Supervisión", value=parse_fecha(datos_existentes.get('fecha_sup')), key=f"fs_{p_num}")
 
-nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''), key=f"n_{p_num}", help="Solo letras permitidas")
-apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''), key=f"a_{p_num}", help="Solo letras permitidas")
+nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''), key=f"n_{p_num}")
+apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''), key=f"a_{p_num}")
 
-rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), key=f"r_{p_num}", help="Solo números, guion y K. Ejemplo: 12345678-K")
+rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), key=f"r_{p_num}")
 fecha_atencion = st.date_input("Fecha de Atención supervisada", value=parse_fecha(datos_existentes.get('fecha_atencion')), key=f"fa_{p_num}")
 
 servicio = st.selectbox("Servicio Clínico", servicios, index=idx_serv, key=f"s_{p_num}")
