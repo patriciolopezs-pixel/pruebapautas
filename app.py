@@ -9,7 +9,7 @@ import re
 # Configuración de la página web
 st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="centered")
 
-# --- ESTILOS CSS VISUALES (REDSALUD MODO CLARO) ---
+# --- ESTILOS CSS VISUALES ---
 st.markdown("""
 <style>
     .stApp {
@@ -89,7 +89,7 @@ def parse_fecha(fecha_str):
     return datetime.date.today()
 
 
-# --- 2. GENERADOR EXCEL CONSOLIDADO CON FORMATO EXACTO ---
+# --- 2. GENERADOR EXCEL CONSOLIDADO ---
 def generar_excel_consolidado(pautas_dict):
     wb = Workbook()
     ws = wb.active
@@ -111,7 +111,7 @@ def generar_excel_consolidado(pautas_dict):
     teal_sub_fill = PatternFill(start_color="00828A", end_color="00828A", fill_type="solid")
     soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
 
-    # Encabezado principal (Fila 1 y 2)
+    # Encabezado principal
     ws.merge_cells('A1:AK1')
     ws['A1'] = "PAUTA DE SUPERVISIÓN CUMPLIMIENTO DE PAUSA DE SEGURIDAD DENTAL EN BOX DENTAL, PABELLÓN DE CIRUGÍA MENOR DENTAL E IMAGENOLOGÍA DENTAL (GCL 2.1 AO)"
     ws['A1'].font = bold_font_white
@@ -124,7 +124,7 @@ def generar_excel_consolidado(pautas_dict):
     ws['A2'].font = bold_font_navy
     ws['B2'].alignment = center_aligned_text
 
-    # Etiquetas de filas (Filas 3 a 10)
+    # Etiquetas de filas
     etiquetas = [
         "Centro", 
         "Fecha de Supervisión", 
@@ -143,30 +143,26 @@ def generar_excel_consolidado(pautas_dict):
 
     ws.column_dimensions['A'].width = 50
 
-    # Fila 11: N° DE PAUTA
+    # Criterios y headers
     ws.cell(row=11, column=1, value="N° DE PAUTA").font = bold_font_white
     ws.cell(row=11, column=1).fill = teal_sub_fill
     
-    # Fila 12: CRITERIOS A EVALUAR
     ws.cell(row=12, column=1, value="CRITERIOS A EVALUAR").font = bold_font_white
     ws.cell(row=12, column=1).fill = teal_sub_fill
     
-    # Fila 13: Criterio
     ws.cell(row=13, column=1, value="Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica.")
     ws.cell(row=13, column=1).alignment = left_aligned_text
     
-    # Fila 14: Cumple (SI/NO)
     ws.cell(row=14, column=1, value="Cumple (SI/NO)").font = bold_font_navy
     ws.cell(row=14, column=1).fill = soft_teal_fill
     
-    # Fila 15: Totales
     ws.cell(row=15, column=1, value="Total Cumple").font = bold_font_navy
     ws.cell(row=15, column=1).fill = soft_teal_fill
 
     total_cumple = 0
     total_no_cumple = 0
 
-    # Llenado de las 18 pautas (Columnas B a AK)
+    # Llenado de pautas (Columnas B a AK)
     for idx in range(18):
         num_pauta = idx + 1
         col_start = 2 + (idx * 2)
@@ -174,26 +170,22 @@ def generar_excel_consolidado(pautas_dict):
 
         pauta_data = pautas_dict.get(num_pauta) or {}
 
-        # Datos generales (Filas 3 a 10)
         campos = ["centro", "fecha_sup", "nombre", "apellido", "rut", "fecha_atencion", "servicio", "exodoncia"]
         for row_idx, campo in enumerate(campos, start=3):
             ws.merge_cells(start_row=row_idx, start_column=col_start, end_row=row_idx, end_column=col_end)
             ws.cell(row=row_idx, column=col_start, value=pauta_data.get(campo, ""))
             ws.cell(row=row_idx, column=col_start).alignment = center_aligned_text
 
-        # Fila 11: N° de Pauta
         ws.merge_cells(start_row=11, start_column=col_start, end_row=11, end_column=col_end)
         ws.cell(row=11, column=col_start, value=num_pauta).alignment = center_aligned_text
         ws.cell(row=11, column=col_start).font = bold_font_navy
         ws.cell(row=11, column=col_start).fill = soft_teal_fill
 
-        # Fila 12: Headers SI / NO
         ws.cell(row=12, column=col_start, value="SI").alignment = center_aligned_text
         ws.cell(row=12, column=col_start).font = bold_font_navy
         ws.cell(row=12, column=col_end, value="NO").alignment = center_aligned_text
         ws.cell(row=12, column=col_end).font = bold_font_navy
 
-        # Fila 13 & 14: Marcas y Registro Cumple
         cumple = pauta_data.get("cumple", "")
         if cumple == "SI":
             ws.cell(row=13, column=col_start, value="√").alignment = center_aligned_text
@@ -208,7 +200,7 @@ def generar_excel_consolidado(pautas_dict):
         else:
             ws.merge_cells(start_row=14, start_column=col_start, end_row=14, end_column=col_end)
 
-    # Fila 15: Estructura exacta de Totales e Indicadores
+    # Totales e Indicadores
     ws.merge_cells('B15:F15')
     ws['B15'] = total_cumple
     ws['B15'].alignment = center_aligned_text
@@ -233,23 +225,33 @@ def generar_excel_consolidado(pautas_dict):
     ws['S15'] = porcentaje
     ws['S15'].alignment = center_aligned_text
 
-    # Filas 16 a 20: Observaciones y Firma/Timbre
-    ws.merge_cells('A16:R20')
+    # Observaciones y Timbre/Firma
+    ws.merge_cells('A16:Q20')
     ws['A16'] = "Observaciones:"
     ws['A16'].font = bold_font_navy
     ws['A16'].alignment = Alignment(horizontal="left", vertical="top")
 
-    ws.merge_cells('S16:V18')  # Espacio en blanco para firma o timbre
-    
-    ws.merge_cells('S19:V20')
-    ws['S19'] = "Nombre o Timbre\ndel responsable de\naplicar la pauta"
-    ws['S19'].font = bold_font_navy
-    ws['S19'].alignment = center_aligned_text
+    ws.merge_cells('R16:U18')  # Espacio en blanco para firma o timbre
 
-    # Aplicar bordes en todo el rango
-    for row in ws.iter_rows(min_row=1, max_row=20, min_col=1, max_col=37):
-        for cell in row:
-            cell.border = thin_border
+    ws.merge_cells('R19:U20')
+    ws['R19'] = "Nombre o Timbre\ndel responsable de\naplicar la pauta"
+    ws['R19'].font = bold_font_navy
+    ws['R19'].alignment = center_aligned_text
+
+    # Ajuste de altura para que el texto sea perfectamente legible
+    ws.row_dimensions[19].height = 20
+    ws.row_dimensions[20].height = 20
+
+    # Aplicación de bordes controlada (evita recuadros en blanco al final)
+    # 1. Tabla principal (Filas 1 a 15, todas las columnas)
+    for r in range(1, 16):
+        for c in range(1, 38):
+            ws.cell(row=r, column=c).border = thin_border
+
+    # 2. Bloque inferior (Filas 16 a 20, solo hasta la columna U)
+    for r in range(16, 21):
+        for c in range(1, 22):
+            ws.cell(row=r, column=c).border = thin_border
 
     output = io.BytesIO()
     wb.save(output)
