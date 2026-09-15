@@ -4,12 +4,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 import io
 import datetime
-import re  # Módulo para filtrado de texto
+import re
 
 # Configuración de la página web
 st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="centered")
 
-# --- ESTILOS CSS CON MAYÚSCULAS AUTOMÁTICAS ---
+# --- ESTILOS Y RESTRICCIÓN DE TECLADO EN TIEMPO REAL (JS) ---
 st.markdown("""
 <style>
     /* Fondo global */
@@ -36,7 +36,7 @@ st.markdown("""
         -webkit-text-fill-color: #00205B !important;
         border: 1px solid #CBD5E1 !important;
         border-radius: 8px !important;
-        text-transform: uppercase !important; /* Escribe en Mayúsculas visualmente */
+        text-transform: uppercase !important;
     }
 
     /* Contenedor del Formulario (Tarjeta Blanca) */
@@ -78,6 +78,43 @@ st.markdown("""
         border-radius: 8px !important;
     }
 </style>
+
+<script>
+// Script de bloqueo de caracteres en tiempo real
+(function() {
+    const doc = window.parent.document;
+    
+    function aplicarRestricciones() {
+        const inputs = doc.querySelectorAll('input');
+        inputs.forEach(input => {
+            const label = input.getAttribute('aria-label') || '';
+            
+            // Restricción para Nombre y Apellido (Solo letras, tildes, Ñ y espacios)
+            if (label.includes('Nombre') || label.includes('Apellido')) {
+                if (!input.dataset.restrictedLetters) {
+                    input.dataset.restrictedLetters = "true";
+                    input.addEventListener('input', function() {
+                        this.value = this.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '').toUpperCase();
+                    });
+                }
+            }
+            
+            // Restricción para RUT (Solo números, guion y letra K)
+            if (label.includes('RUT')) {
+                if (!input.dataset.restrictedRut) {
+                    input.dataset.restrictedRut = "true";
+                    input.addEventListener('input', function() {
+                        this.value = this.value.replace(/[^0-9kK\-]/g, '').toUpperCase();
+                    });
+                }
+            }
+        });
+    }
+    
+    // Verificación continua para campos dinámicos
+    setInterval(aplicarRestricciones, 300);
+})();
+</script>
 """, unsafe_allow_html=True)
 
 
@@ -268,7 +305,7 @@ with st.form(key=f"form_pauta_numero_{p_num}"):
     fecha_sup = st.date_input("Fecha de Supervisión", value=parse_fecha(datos_existentes.get('fecha_sup')))
     nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''))
     apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''))
-    rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), help="Formato: 12345678-K (sin puntos)")
+    rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), help="Ejemplo: 12345678-K")
     fecha_atencion = st.date_input("Fecha de Atención supervisada", value=parse_fecha(datos_existentes.get('fecha_atencion')))
     servicio = st.selectbox("Servicio Clínico", servicios, index=idx_serv)
     exodoncia = st.radio("¿Procedimiento corresponde a Exodoncia?", ["SI", "NO"], index=idx_exo)
@@ -280,13 +317,10 @@ with st.form(key=f"form_pauta_numero_{p_num}"):
     btn_guardar = st.form_submit_button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True)
 
     if btn_guardar:
-        # --- LIMPIEZA Y VALIDACIÓN DE DATOS ---
-        # 1. Nombre y Apellido: Solo letras, espacios, acentos y Ñ, convertidos a MAYÚSCULAS
+        # Filtrado de respaldo en servidor
         nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre).strip().upper()
         apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', apellido).strip().upper()
         centro_clean = centro.strip().upper()
-        
-        # 2. RUT: Solo números, guion (-) y letra K/k (en mayúscula)
         rut_clean = re.sub(r'[^0-9kK\-]', '', rut).strip().upper()
 
         st.session_state.pautas_data[p_num] = {
