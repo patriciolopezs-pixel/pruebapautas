@@ -9,15 +9,13 @@ import re
 # Configuración de la página web
 st.set_page_config(page_title="Portal de Pautas de Supervisión - RedSalud", layout="centered")
 
-# --- ESTILOS CSS CORPORATIVOS Y TARJETAS ---
+# --- ESTILOS CSS CORPORATIVOS REDSALUD ---
 st.markdown("""
 <style>
-    /* Fondo global */
     .stApp {
         background-color: #F4F7F6 !important;
     }
     
-    /* Encabezados */
     h1, h2, h3, h4 {
         color: #00205B !important;
         font-family: 'Segoe UI', Tahoma, sans-serif !important;
@@ -28,7 +26,6 @@ st.markdown("""
         color: #00205B !important;
     }
 
-    /* Campos de entrada */
     input, select, textarea, div[data-baseweb="select"] {
         background-color: #FFFFFF !important;
         color: #00205B !important;
@@ -38,7 +35,6 @@ st.markdown("""
         text-transform: uppercase !important;
     }
 
-    /* Botón Principal (Turquesa RedSalud) */
     button[kind="primary"] {
         background-color: #00828A !important;
         border: none !important;
@@ -49,7 +45,6 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* Botón Secundario / Descarga / Volver */
     button[kind="secondary"], .stDownloadButton button {
         background-color: #00205B !important;
         border: none !important;
@@ -60,7 +55,6 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* Estilo para las Tarjetas de la Pantalla de Inicio */
     .card-pauta {
         background-color: #FFFFFF;
         border: 1px solid #E2E8F0;
@@ -70,32 +64,35 @@ st.markdown("""
         margin-bottom: 20px;
         box-shadow: 0 4px 12px rgba(0, 32, 91, 0.08);
     }
-
-    .card-pauta-future {
-        background-color: #FAFAFA;
-        border: 1px dashed #CBD5E1;
-        border-top: 6px solid #B0BEC5;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
-        opacity: 0.8;
-    }
 </style>
 """, unsafe_allow_html=True)
 
 
-# --- 1. ESTADO DE LA SESIÓN Y NAVEGACIÓN ---
+# --- ESTADO DE LA SESIÓN ---
 if 'pagina_activa' not in st.session_state:
     st.session_state.pagina_activa = "inicio"
 
+# Datos Pauta 1: Pausa Dental (18)
 if 'pautas_data' not in st.session_state:
     st.session_state.pautas_data = {i: None for i in range(1, 19)}
-
 if 'pauta_actual' not in st.session_state:
     st.session_state.pauta_actual = 1
-
 if 'ultimo_centro' not in st.session_state:
     st.session_state.ultimo_centro = ""
+
+# Datos Pauta 2: Higiene de Manos (12)
+if 'higiene_data' not in st.session_state:
+    st.session_state.higiene_data = {i: None for i in range(1, 13)}
+if 'higiene_actual' not in st.session_state:
+    st.session_state.higiene_actual = 1
+if 'centro_higiene' not in st.session_state:
+    st.session_state.centro_higiene = "CD LA REINA"
+if 'mes_higiene' not in st.session_state:
+    st.session_state.mes_higiene = "AGOSTO 2026"
+if 'evaluador_higiene' not in st.session_state:
+    st.session_state.evaluador_higiene = ""
+if 'responsable_higiene' not in st.session_state:
+    st.session_state.responsable_higiene = ""
 
 
 def parse_fecha(fecha_str):
@@ -110,7 +107,7 @@ def parse_fecha(fecha_str):
     return datetime.date.today()
 
 
-# --- 2. LÓGICA DE CARGA MASIVA ---
+# --- LÓGICA DE CARGA MASIVA PAUSA DENTAL ---
 def procesar_df_masivo(df, fecha_sup_default):
     df.columns = [str(c).strip().lower() for c in df.columns]
     
@@ -176,20 +173,18 @@ def procesar_df_masivo(df, fecha_sup_default):
     return count
 
 
-# --- 3. GENERADOR EXCEL CONSOLIDADO ---
-def generar_excel_consolidado(pautas_dict):
+# --- EXCEL 1: CONSOLIDADO PAUSA DENTAL ---
+def generar_excel_pausa_dental(pautas_dict):
     wb = Workbook()
     ws = wb.active
     ws.title = "Consolidado Pautas"
 
     thin_border = Border(
-        left=Side(style='thin', color='000000'), 
-        right=Side(style='thin', color='000000'), 
-        top=Side(style='thin', color='000000'), 
-        bottom=Side(style='thin', color='000000')
+        left=Side(style='thin', color='000000'), right=Side(style='thin', color='000000'), 
+        top=Side(style='thin', color='000000'), bottom=Side(style='thin', color='000000')
     )
-    center_aligned_text = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    left_aligned_text = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    center_aligned = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left_aligned = Alignment(horizontal="left", vertical="center", wrap_text=True)
     
     bold_font_white = Font(bold=True, color="FFFFFF")
     bold_font_navy = Font(bold=True, color="00205B")
@@ -202,20 +197,17 @@ def generar_excel_consolidado(pautas_dict):
     ws['A1'] = "PAUTA DE SUPERVISIÓN CUMPLIMIENTO DE PAUSA DE SEGURIDAD DENTAL EN BOX DENTAL, PABELLÓN DE CIRUGÍA MENOR DENTAL E IMAGENOLOGÍA DENTAL (GCL 2.1 AO)"
     ws['A1'].font = bold_font_white
     ws['A1'].fill = navy_header_fill
-    ws['A1'].alignment = center_aligned_text
+    ws['A1'].alignment = center_aligned
 
     ws['A2'] = "Indicaciones llenado pauta"
     ws.merge_cells('B2:AK2')
     ws['B2'] = "Marque √ SI cumple, Marque X NO cumple, o No Aplica (si corresponde). En ítem cumple registre SI o NO. Registre en observaciones motivo incumplimiento."
     ws['A2'].font = bold_font_navy
-    ws['B2'].alignment = center_aligned_text
+    ws['B2'].alignment = center_aligned
 
     etiquetas = [
-        "Centro", 
-        "Fecha de Supervisión", 
-        "Nombre de la persona supervisada", 
-        "Apellido(s) de la persona supervisada", 
-        "RUT del paciente", 
+        "Centro", "Fecha de Supervisión", "Nombre de la persona supervisada", 
+        "Apellido(s) de la persona supervisada", "RUT del paciente", 
         "Fecha de Atención supervisada", 
         "Servicio Clínico donde se realizó el procedimiento, ya sea Sala de Procedimiento Dental (BD), Pabellón de Cirugía menor Dental (PD), e Imagenología Dental (RX)",
         "Procedimiento corresponde a Exodoncia (SI, NO)"
@@ -223,23 +215,18 @@ def generar_excel_consolidado(pautas_dict):
 
     for i, etiqueta in enumerate(etiquetas, start=3):
         ws.cell(row=i, column=1, value=etiqueta).font = bold_font_navy
-        ws.cell(row=i, column=1).alignment = left_aligned_text
+        ws.cell(row=i, column=1).alignment = left_aligned
         ws.cell(row=i, column=1).fill = soft_teal_fill
 
     ws.column_dimensions['A'].width = 50
 
     ws.cell(row=11, column=1, value="N° DE PAUTA").font = bold_font_white
     ws.cell(row=11, column=1).fill = teal_sub_fill
-    
     ws.cell(row=12, column=1, value="CRITERIOS A EVALUAR").font = bold_font_white
     ws.cell(row=12, column=1).fill = teal_sub_fill
-    
-    ws.cell(row=13, column=1, value="Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica.")
-    ws.cell(row=13, column=1).alignment = left_aligned_text
-    
+    ws.cell(row=13, column=1, value="Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica.").alignment = left_aligned
     ws.cell(row=14, column=1, value="Cumple (SI/NO)").font = bold_font_navy
     ws.cell(row=14, column=1).fill = soft_teal_fill
-    
     ws.cell(row=15, column=1, value="Total Cumple").font = bold_font_navy
     ws.cell(row=15, column=1).fill = soft_teal_fill
 
@@ -252,60 +239,58 @@ def generar_excel_consolidado(pautas_dict):
         col_end = col_start + 1
 
         pauta_data = pautas_dict.get(num_pauta) or {}
-
         campos = ["centro", "fecha_sup", "nombre", "apellido", "rut", "fecha_atencion", "servicio", "exodoncia"]
         for row_idx, campo in enumerate(campos, start=3):
             ws.merge_cells(start_row=row_idx, start_column=col_start, end_row=row_idx, end_column=col_end)
-            ws.cell(row=row_idx, column=col_start, value=pauta_data.get(campo, ""))
-            ws.cell(row=row_idx, column=col_start).alignment = center_aligned_text
+            ws.cell(row=row_idx, column=col_start, value=pauta_data.get(campo, "")).alignment = center_aligned
 
         ws.merge_cells(start_row=11, start_column=col_start, end_row=11, end_column=col_end)
-        ws.cell(row=11, column=col_start, value=num_pauta).alignment = center_aligned_text
+        ws.cell(row=11, column=col_start, value=num_pauta).alignment = center_aligned
         ws.cell(row=11, column=col_start).font = bold_font_navy
         ws.cell(row=11, column=col_start).fill = soft_teal_fill
 
-        ws.cell(row=12, column=col_start, value="SI").alignment = center_aligned_text
+        ws.cell(row=12, column=col_start, value="SI").alignment = center_aligned
         ws.cell(row=12, column=col_start).font = bold_font_navy
-        ws.cell(row=12, column=col_end, value="NO").alignment = center_aligned_text
+        ws.cell(row=12, column=col_end, value="NO").alignment = center_aligned
         ws.cell(row=12, column=col_end).font = bold_font_navy
 
         cumple = pauta_data.get("cumple", "")
         if cumple == "SI":
-            ws.cell(row=13, column=col_start, value="√").alignment = center_aligned_text
+            ws.cell(row=13, column=col_start, value="√").alignment = center_aligned
             ws.merge_cells(start_row=14, start_column=col_start, end_row=14, end_column=col_end)
-            ws.cell(row=14, column=col_start, value="SI").alignment = center_aligned_text
+            ws.cell(row=14, column=col_start, value="SI").alignment = center_aligned
             total_cumple += 1
         elif cumple == "NO":
-            ws.cell(row=13, column=col_end, value="X").alignment = center_aligned_text
+            ws.cell(row=13, column=col_end, value="X").alignment = center_aligned
             ws.merge_cells(start_row=14, start_column=col_start, end_row=14, end_column=col_end)
-            ws.cell(row=14, column=col_start, value="NO").alignment = center_aligned_text
+            ws.cell(row=14, column=col_start, value="NO").alignment = center_aligned
             total_no_cumple += 1
         else:
             ws.merge_cells(start_row=14, start_column=col_start, end_row=14, end_column=col_end)
 
     ws.merge_cells('B15:F15')
     ws['B15'] = total_cumple
-    ws['B15'].alignment = center_aligned_text
+    ws['B15'].alignment = center_aligned
 
     ws.merge_cells('G15:J15')
     ws['G15'] = "Total No Cumple"
     ws['G15'].font = bold_font_navy
-    ws['G15'].alignment = center_aligned_text
+    ws['G15'].alignment = center_aligned
 
     ws.merge_cells('K15:N15')
     ws['K15'] = total_no_cumple
-    ws['K15'].alignment = center_aligned_text
+    ws['K15'].alignment = center_aligned
 
     ws.merge_cells('O15:R15')
     ws['O15'] = "% Cumplimiento"
     ws['O15'].font = bold_font_navy
-    ws['O15'].alignment = center_aligned_text
+    ws['O15'].alignment = center_aligned
 
     completadas = sum(1 for v in pautas_dict.values() if v is not None)
     porcentaje = f"{(total_cumple/18)*100:.1f}%" if completadas == 18 else f"{(total_cumple/completadas)*100:.1f}%" if completadas > 0 else "-"
     ws.merge_cells('S15:V15')
     ws['S15'] = porcentaje
-    ws['S15'].alignment = center_aligned_text
+    ws['S15'].alignment = center_aligned
 
     ws.merge_cells('A16:Q20')
     ws['A16'] = "Observaciones:"
@@ -313,11 +298,10 @@ def generar_excel_consolidado(pautas_dict):
     ws['A16'].alignment = Alignment(horizontal="left", vertical="top")
 
     ws.merge_cells('R16:U18')
-
     ws.merge_cells('R19:U20')
     ws['R19'] = "Nombre o Timbre\ndel responsable de\naplicar la pauta"
     ws['R19'].font = bold_font_navy
-    ws['R19'].alignment = center_aligned_text
+    ws['R19'].alignment = center_aligned
 
     ws.row_dimensions[19].height = 20
     ws.row_dimensions[20].height = 20
@@ -336,12 +320,137 @@ def generar_excel_consolidado(pautas_dict):
     return output
 
 
+# --- EXCEL 2: CONSOLIDADO HIGIENE DE MANOS (GCL 1.2) ---
+def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Higiene de Manos"
+
+    thin_border = Border(
+        left=Side(style='thin', color='000000'), right=Side(style='thin', color='000000'), 
+        top=Side(style='thin', color='000000'), bottom=Side(style='thin', color='000000')
+    )
+    center_aligned = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left_aligned = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    
+    bold_font_white = Font(bold=True, color="FFFFFF")
+    bold_font_navy = Font(bold=True, color="00205B")
+    
+    navy_header_fill = PatternFill(start_color="00205B", end_color="00205B", fill_type="solid")
+    soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
+
+    # Encabezado
+    ws.merge_cells('A1:M1')
+    ws['A1'] = "GCL 1.2 PAUTA SUPERVISIÓN DE HIGIENE DE MANOS - ÁREA DENTAL"
+    ws['A1'].font = bold_font_white
+    ws['A1'].fill = navy_header_fill
+    ws['A1'].alignment = center_aligned
+
+    ws['A3'] = "Centro Dental:"
+    ws['A3'].font = bold_font_navy
+    ws['B3'] = centro
+    ws['B3'].alignment = left_aligned
+
+    ws['A4'] = "Mes:"
+    ws['A4'].font = bold_font_navy
+    ws['B4'] = mes
+    ws['B4'].alignment = left_aligned
+
+    # Filas generales (5 a 8)
+    ws.cell(row=5, column=1, value="Número correlativo").font = bold_font_navy
+    ws.cell(row=6, column=1, value="Fecha de la evaluación").font = bold_font_navy
+    ws.cell(row=7, column=1, value="Nombre del evaluador").font = bold_font_navy
+    ws.cell(row=8, column=1, value="Nombre del evaluado").font = bold_font_navy
+
+    for r in range(5, 9):
+        ws.cell(row=r, column=1).fill = soft_teal_fill
+        ws.cell(row=r, column=1).alignment = left_aligned
+
+    ws.column_dimensions['A'].width = 38
+
+    ws.cell(row=10, column=1, value="CRITERIOS A EVALUAR").font = bold_font_navy
+    ws.cell(row=10, column=1).fill = soft_teal_fill
+    ws.cell(row=11, column=1, value="N° oportunidad evaluada").font = bold_font_navy
+    ws.cell(row=12, column=1, value="Se realiza higiene de manos según oportunidad").font = bold_font_navy
+
+    total_cumple = 0
+    total_aplicadas = 0
+
+    for idx in range(12):
+        num = idx + 1
+        col = idx + 2
+        
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 15
+        
+        ws.cell(row=5, column=col, value=num).alignment = center_aligned
+        ws.cell(row=5, column=col).font = bold_font_navy
+
+        data = higiene_dict.get(num) or {}
+        ws.cell(row=6, column=col, value=data.get("fecha_eval", "")).alignment = center_aligned
+        ws.cell(row=7, column=col, value=data.get("evaluador", "")).alignment = center_aligned
+        ws.cell(row=8, column=col, value=data.get("evaluado", "")).alignment = center_aligned
+
+        ws.cell(row=11, column=col, value=data.get("oportunidad", "")).alignment = center_aligned
+        
+        cumple = data.get("cumple", "")
+        if cumple:
+            ws.cell(row=12, column=col, value=cumple).alignment = center_aligned
+            total_aplicadas += 1
+            if cumple == "SI":
+                total_cumple += 1
+
+    # Leyenda Oportunidades (Filas 14 a 19)
+    ws.merge_cells('A14:E14')
+    ws['A14'] = "Oportunidades de lavado de manos"
+    ws['A14'].font = bold_font_navy
+    ws['A14'].fill = soft_teal_fill
+
+    leyendas = [
+        "1. Antes del contacto con el paciente",
+        "2. Antes de una técnica aséptica",
+        "3. Después de la exposición a fluidos corporales o manejo de fluidos contaminados",
+        "4. Después del contacto con el paciente",
+        "5. Después de tener contacto con la zona alrededor del paciente"
+    ]
+    for i, ley in enumerate(leyendas, start=15):
+        ws.merge_cells(start_row=i, start_column=1, end_row=i, end_column=5)
+        ws.cell(row=i, column=1, value=ley).alignment = left_aligned
+
+    # Bloque de Resumen (Filas 21 a 23)
+    ws.cell(row=21, column=1, value="Total de pautas que cumplen criterios").font = bold_font_navy
+    ws.cell(row=21, column=2, value=total_cumple).alignment = center_aligned
+
+    ws.cell(row=22, column=1, value="Total de pautas aplicadas").font = bold_font_navy
+    ws.cell(row=22, column=2, value=total_aplicadas).alignment = center_aligned
+
+    pct = f"{(total_cumple/total_aplicadas)*100:.0f}%" if total_aplicadas > 0 else "0%"
+    ws.cell(row=23, column=1, value="Porcentaje de cumplimiento").font = bold_font_navy
+    ws.cell(row=23, column=2, value=pct).alignment = center_aligned
+
+    ws.cell(row=25, column=1, value="Nombre de responsable del indicador").font = bold_font_navy
+    ws.merge_cells('B25:E25')
+    ws['B25'] = responsable
+    ws['B25'].alignment = left_aligned
+
+    # Aplicar Bordes
+    for r in range(1, 26):
+        for c in range(1, 14):
+            if r not in [2, 9, 13, 20, 24]:
+                ws.cell(row=r, column=c).border = thin_border
+
+    output = io.BytesIO()
+    import openpyxl.utils
+    wb.save(output)
+    output.seek(0)
+    return output
+
+
 # ==============================================================================
-# --- VISTA 1: PANTALLA DE INICIO (PORTAL DE PAUTAS) ---
+# --- VISTA 1: PORTAL DE INICIO ---
 # ==============================================================================
 if st.session_state.pagina_activa == "inicio":
     st.title("RedSalud | Portal de Pautas de Supervisión")
-    st.write("Bienvenido al sistema de consolidación de pautas de supervisión clínica. Seleccione la pauta que desea evaluar:")
+    st.write("Bienvenido al sistema de consolidación de pautas clínicas. Seleccione la pauta a evaluar:")
 
     st.markdown("---")
 
@@ -349,33 +458,35 @@ if st.session_state.pagina_activa == "inicio":
     st.markdown("""
     <div class="card-pauta">
         <h3 style="margin-top:0; color:#00205B;">🦷 Pausa de Seguridad Dental (GCL 2.1 AO)</h3>
-        <p>Evaluación de cumplimiento de Pausa de Seguridad Dental en Box Dental, Pabellón de Cirugía Menor e Imagenología Dental.</p>
-        <p><b>Capacidad:</b> 18 Pautas de Supervisión por Consolidado.</p>
+        <p>Evaluación de Pausa de Seguridad Dental en Box Dental, Pabellón de Cirugía Menor e Imagenología.</p>
+        <p><b>Formato:</b> Consolidado de 18 Pautas.</p>
     </div>
     """, unsafe_allow_html=True)
     
-    if st.button("🚀 Ingresar a Pauta de Seguridad Dental", type="primary", use_container_width=True):
+    if st.button("🚀 Ingresar a Pausa de Seguridad Dental", type="primary", use_container_width=True):
         st.session_state.pagina_activa = "pauta_dental"
         st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Tarjeta 2: Próximas Pautas (Placeholder)
+    # Tarjeta 2: Higiene de Manos
     st.markdown("""
-    <div class="card-pauta-future">
-        <h3 style="margin-top:0; color:#00205B;">📋 Próximas Pautas de Supervisión</h3>
-        <p>Espacio reservado para incorporar nuevas pautas institucionales (Higiene de Manos, Seguridad Quirúrgica, EPP, etc.).</p>
-        <p><i>Estado: En desarrollo...</i></p>
+    <div class="card-pauta">
+        <h3 style="margin-top:0; color:#00205B;">🧼 Higiene de Manos - Área Dental (GCL 1.2)</h3>
+        <p>Supervisión del cumplimiento de técnica y momentos de Higiene de Manos en el equipo dental.</p>
+        <p><b>Formato:</b> Consolidado de 12 Evaluaciones Mensuales.</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    if st.button("🚀 Ingresar a Higiene de Manos Dental", type="primary", use_container_width=True):
+        st.session_state.pagina_activa = "pauta_higiene"
+        st.rerun()
 
 
 # ==============================================================================
-# --- VISTA 2: APLICACIÓN PAUSA DE SEGURIDAD DENTAL ---
+# --- VISTA 2: PAUSA DE SEGURIDAD DENTAL (18 PAUTAS) ---
 # ==============================================================================
 elif st.session_state.pagina_activa == "pauta_dental":
-    
-    # Botón para volver al inicio
     if st.button("⬅️ Volver al Portal de Inicio", use_container_width=True):
         st.session_state.pagina_activa = "inicio"
         st.rerun()
@@ -383,16 +494,13 @@ elif st.session_state.pagina_activa == "pauta_dental":
     st.markdown("---")
     st.title("RedSalud | Pausa de Seguridad Dental")
 
-    # MÓDULO DE CARGA MASIVA
     with st.expander("📥 **Carga Masiva Mensual (Copiar y Pegar desde Excel / Archivo)**", expanded=False):
         st.write("Copia la tabla desde Excel y pégala abajo, o sube el archivo directamente:")
-        
         fecha_sup_masiva = st.date_input("Fecha de Supervisión para el lote:", value=datetime.date.today())
         
         tab1, tab2 = st.tabs(["📋 Pegar Texto desde Excel", "📁 Subir Archivo Excel/CSV"])
-        
         with tab1:
-            texto_pegado = st.text_area("Pega la tabla copiada desde Excel aquí:", height=150, placeholder="Pega aquí las filas copiadas directamente de tu Excel...")
+            texto_pegado = st.text_area("Pega la tabla copiada desde Excel aquí:", height=150)
             if st.button("⚡ Procesar Texto Pegado", type="primary"):
                 if texto_pegado.strip():
                     try:
@@ -401,70 +509,53 @@ elif st.session_state.pagina_activa == "pauta_dental":
                         st.success(f"✅ ¡Se cargaron {cargadas} pautas automáticamente!")
                         st.rerun()
                     except Exception as e:
-                        st.error("Ocurrió un error al leer el texto. Asegúrate de copiar las columnas completas desde Excel.")
+                        st.error("Ocurrió un error al leer el texto.")
                 else:
-                    st.warning("Por favor pega algún texto antes de procesar.")
+                    st.warning("Pega texto antes de procesar.")
                     
         with tab2:
             archivo_subido = st.file_uploader("Selecciona archivo Excel (.xlsx) o CSV:", type=["xlsx", "csv"])
             if st.button("⚡ Procesar Archivo Subido", type="primary"):
                 if archivo_subido is not None:
                     try:
-                        if archivo_subido.name.endswith('.csv'):
-                            df_file = pd.read_csv(archivo_subido)
-                        else:
-                            df_file = pd.read_excel(archivo_subido)
+                        df_file = pd.read_csv(archivo_subido) if archivo_subido.name.endswith('.csv') else pd.read_excel(archivo_subido)
                         cargadas = procesar_df_masivo(df_file, fecha_sup_masiva)
                         st.success(f"✅ ¡Se cargaron {cargadas} pautas automáticamente!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Error al leer el archivo: {e}")
-                else:
-                    st.warning("Selecciona un archivo antes de procesar.")
+                        st.error(f"Error al leer archivo: {e}")
 
     st.markdown("---")
-
     completadas = sum(1 for v in st.session_state.pautas_data.values() if v is not None)
-
     st.progress(completadas / 18)
     st.caption(f"Progreso global: **{completadas} de 18 pautas guardadas**")
-
-    def formato_opcion(num):
-        estado = "✅ Guardada" if st.session_state.pautas_data[num] is not None else "⏳ Pendiente"
-        return f"Pauta N° {num} ({estado})"
 
     pauta_seleccionada = st.selectbox(
         "Selecciona la pauta a ingresar o revisar:",
         options=list(range(1, 19)),
         index=st.session_state.pauta_actual - 1,
-        format_func=formato_opcion
+        format_func=lambda num: f"Pauta N° {num} ({'✅ Guardada' if st.session_state.pautas_data[num] is not None else '⏳ Pendiente'})"
     )
 
     st.session_state.pauta_actual = pauta_seleccionada
     p_num = st.session_state.pauta_actual
-
     datos_existentes = st.session_state.pautas_data[p_num] or {}
 
-    servicios = [
-        "Sala de Procedimiento Dental (BD)", 
-        "Pabellón de Cirugía menor Dental (PD)", 
-        "Imagenología Dental (RX)"
-    ]
+    servicios = ["Sala de Procedimiento Dental (BD)", "Pabellón de Cirugía menor Dental (PD)", "Imagenología Dental (RX)"]
     idx_serv = servicios.index(datos_existentes.get('servicio')) if datos_existentes.get('servicio') in servicios else 0
     idx_exo = 0 if datos_existentes.get('exodoncia') != "NO" else 1
     idx_cumple = 0 if datos_existentes.get('cumple') != "NO" else 1
 
-    # Formulario libre
     st.markdown('<div class="card-pauta">', unsafe_allow_html=True)
     st.subheader(f"Formulario Pauta N° {p_num}")
 
     centro = st.text_input("Centro", value=datos_existentes.get('centro', st.session_state.ultimo_centro), key=f"c_{p_num}")
     fecha_sup = st.date_input("Fecha de Supervisión", value=parse_fecha(datos_existentes.get('fecha_sup')), key=f"fs_{p_num}")
 
-    nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''), key=f"n_{p_num}", help="Solo letras permitidas")
-    apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''), key=f"a_{p_num}", help="Solo letras permitidas")
+    nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''), key=f"n_{p_num}")
+    apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''), key=f"a_{p_num}")
 
-    rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), key=f"r_{p_num}", help="Solo números, guion y K. Ejemplo: 12345678-K")
+    rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), key=f"r_{p_num}")
     fecha_atencion = st.date_input("Fecha de Atención supervisada", value=parse_fecha(datos_existentes.get('fecha_atencion')), key=f"fa_{p_num}")
 
     servicio = st.selectbox("Servicio Clínico", servicios, index=idx_serv, key=f"s_{p_num}")
@@ -474,49 +565,27 @@ elif st.session_state.pagina_activa == "pauta_dental":
     st.markdown("**CRITERIO A EVALUAR**")
     cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica?", ["SI", "NO"], index=idx_cumple, key=f"cu_{p_num}")
 
-    btn_guardar = st.button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True, key=f"btn_{p_num}")
-
-    if btn_guardar:
-        nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre).strip().upper()
-        apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', apellido).strip().upper()
-        centro_clean = centro.strip().upper()
-        rut_clean = re.sub(r'[^0-9kK\-]', '', rut).strip().upper()
-
+    if st.button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True, key=f"btn_{p_num}"):
         st.session_state.pautas_data[p_num] = {
-            "centro": centro_clean,
+            "centro": centro.strip().upper(),
             "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
-            "nombre": nombre_clean,
-            "apellido": apellido_clean,
-            "rut": rut_clean,
+            "nombre": re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre).strip().upper(),
+            "apellido": re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', apellido).strip().upper(),
+            "rut": re.sub(r'[^0-9kK\-]', '', rut).strip().upper(),
             "fecha_atencion": fecha_atencion.strftime("%d-%m-%Y"),
             "servicio": servicio,
             "exodoncia": exodoncia,
             "cumple": cumple
         }
-        st.session_state.ultimo_centro = centro_clean
-        
+        st.session_state.ultimo_centro = centro.strip().upper()
         if p_num < 18:
             st.session_state.pauta_actual = p_num + 1
-        
         st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Resumen y descarga
-    if completadas == 18:
-        st.success("🎉 ¡Has completado las 18 pautas exitosamente!")
-    else:
-        st.info(f"Faltan **{18 - completadas} pautas** por completar para finalizar el proceso.")
-
-    excel_file = generar_excel_consolidado(st.session_state.pautas_data)
-
-    st.download_button(
-        label="📥 Descargar Excel Consolidado",
-        data=excel_file,
-        file_name="Consolidado_Pausa_Seguridad_Dental.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
-    )
+    excel_file = generar_excel_pausa_dental(st.session_state.pautas_data)
+    st.download_button(label="📥 Descargar Excel Consolidado Pausa Dental", data=excel_file, file_name="Consolidado_Pausa_Seguridad_Dental.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
     if st.button("🔄 Reiniciar todo y borrar pautas", use_container_width=True):
         st.session_state.pautas_data = {i: None for i in range(1, 19)}
@@ -524,7 +593,103 @@ elif st.session_state.pagina_activa == "pauta_dental":
         st.session_state.pauta_actual = 1
         st.rerun()
 
-    pautas_list = [v for v in st.session_state.pautas_data.values() if v is not None]
-    if len(pautas_list) > 0:
-        with st.expander(f"📋 Ver resumen de pautas guardadas ({len(pautas_list)}/18)"):
-            st.dataframe(pd.DataFrame(pautas_list), use_container_width=True)
+
+# ==============================================================================
+# --- VISTA 3: HIGIENE DE MANOS - ÁREA DENTAL (12 EVALUACIONES) ---
+# ==============================================================================
+elif st.session_state.pagina_activa == "pauta_higiene":
+    if st.button("⬅️ Volver al Portal de Inicio", use_container_width=True):
+        st.session_state.pagina_activa = "inicio"
+        st.rerun()
+
+    st.markdown("---")
+    st.title("RedSalud | Higiene de Manos - Área Dental (GCL 1.2)")
+
+    # Datos Generales del Mes
+    col1, col2 = st.columns(2)
+    with col1:
+        st.session_state.centro_higiene = st.text_input("Centro Dental", value=st.session_state.centro_higiene).upper()
+    with col2:
+        st.session_state.mes_higiene = st.text_input("Mes de Evaluación", value=st.session_state.mes_higiene).upper()
+
+    st.session_state.responsable_higiene = st.text_input("Nombre de responsable del indicador", value=st.session_state.responsable_higiene).upper()
+
+    st.markdown("---")
+    completadas_h = sum(1 for v in st.session_state.higiene_data.values() if v is not None)
+    st.progress(completadas_h / 12)
+    st.caption(f"Progreso global: **{completadas_h} de 12 evaluaciones guardadas**")
+
+    h_num = st.selectbox(
+        "Selecciona la evaluación a ingresar o revisar:",
+        options=list(range(1, 13)),
+        index=st.session_state.higiene_actual - 1,
+        format_func=lambda num: f"Evaluación N° {num} ({'✅ Guardada' if st.session_state.higiene_data[num] is not None else '⏳ Pendiente'})"
+    )
+
+    st.session_state.higiene_actual = h_num
+    datos_h = st.session_state.higiene_data[h_num] or {}
+
+    st.markdown('<div class="card-pauta">', unsafe_allow_html=True)
+    st.subheader(f"Evaluación N° {h_num}")
+
+    fecha_eval = st.date_input("Fecha de la evaluación", value=parse_fecha(datos_h.get('fecha_eval')), key=f"feh_{h_num}")
+    evaluador = st.text_input("Nombre del evaluador", value=datos_h.get('evaluador', st.session_state.evaluador_higiene), key=f"evr_{h_num}")
+    evaluado = st.text_input("Nombre del evaluado", value=datos_h.get('evaluado', ''), key=f"evd_{h_num}")
+
+    st.markdown("---")
+    st.markdown("**CRITERIOS A EVALUAR**")
+
+    # Lista de Oportunidades
+    oportunidades_map = {
+        "1": "1. Antes del contacto con el paciente",
+        "2": "2. Antes de una técnica aséptica",
+        "3": "3. Después de la exposición a fluidos corporales o manejo de fluidos contaminados",
+        "4": "4. Después del contacto con el paciente",
+        "5": "5. Después de tener contacto con la zona alrededor del paciente"
+    }
+
+    op_val = str(datos_h.get('oportunidad', '1'))
+    op_sel = st.selectbox("N° Oportunidad evaluada", options=["1", "2", "3", "4", "5"], index=int(op_val)-1 if op_val in ["1","2","3","4","5"] else 0, format_func=lambda x: oportunidades_map[x], key=f"op_{h_num}")
+
+    idx_cumple_h = 0 if datos_h.get('cumple') != "NO" else 1
+    cumple_h = st.radio("Se realiza higiene de manos según oportunidad", ["SI", "NO"], index=idx_cumple_h, key=f"ch_{h_num}")
+
+    if st.button(f"💾 Guardar Evaluación N° {h_num}", type="primary", use_container_width=True, key=f"btn_h_{h_num}"):
+        st.session_state.higiene_data[h_num] = {
+            "fecha_eval": fecha_eval.strftime("%d/%m"),
+            "evaluador": re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s\.]', '', evaluador).strip().upper(),
+            "evaluado": re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s\.]', '', evaluado).strip().upper(),
+            "oportunidad": op_sel,
+            "cumple": cumple_h
+        }
+        st.session_state.evaluador_higiene = evaluador.strip().upper()
+        if h_num < 12:
+            st.session_state.higiene_actual = h_num + 1
+        st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    excel_higiene = generar_excel_higiene_manos(
+        st.session_state.higiene_data,
+        st.session_state.centro_higiene,
+        st.session_state.mes_higiene,
+        st.session_state.responsable_higiene
+    )
+
+    st.download_button(
+        label="📥 Descargar Excel Consolidado Higiene de Manos (GCL 1.2)",
+        data=excel_higiene,
+        file_name="Consolidado_Higiene_de_Manos_Dental.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
+
+    if st.button("🔄 Reiniciar todo y borrar evaluaciones", use_container_width=True):
+        st.session_state.higiene_data = {i: None for i in range(1, 13)}
+        st.session_state.higiene_actual = 1
+        st.rerun()
+
+    higiene_list = [v for v in st.session_state.higiene_data.values() if v is not None]
+    if len(higiene_list) > 0:
+        with st.expander(f"📋 Ver resumen de evaluaciones guardadas ({len(higiene_list)}/12)"):
+            st.dataframe(pd.DataFrame(higiene_list), use_container_width=True)
