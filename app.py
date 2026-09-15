@@ -347,7 +347,6 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     navy_header_fill = PatternFill(start_color="00205B", end_color="00205B", fill_type="solid")
     soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
 
-    # Encabezado principal
     ws.merge_cells('A1:M1')
     ws['A1'] = "GCL 1.2 PAUTA SUPERVISIÓN DE HIGIENE DE MANOS - ÁREA DENTAL"
     ws['A1'].font = bold_font_white
@@ -364,7 +363,6 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     ws['B4'] = mes
     ws['B4'].alignment = left_aligned
 
-    # Filas de datos generales (5 a 8)
     ws.cell(row=5, column=1, value="Número correlativo").font = bold_font_navy
     ws.cell(row=6, column=1, value="Fecha de la evaluación").font = bold_font_navy
     ws.cell(row=7, column=1, value="Nombre del evaluador").font = bold_font_navy
@@ -407,7 +405,6 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
             if cumple == "SI":
                 total_cumple += 1
 
-    # Leyenda Oportunidades (Filas 14 a 19 - Solo Cols A a E)
     ws.merge_cells('A14:E14')
     ws['A14'] = "Oportunidades de lavado de manos"
     ws['A14'].font = bold_font_navy
@@ -424,7 +421,6 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
         ws.merge_cells(start_row=i, start_column=1, end_row=i, end_column=5)
         ws.cell(row=i, column=1, value=ley).alignment = left_aligned
 
-    # Bloque de Resumen (Filas 21 a 23 - Solo Cols A y B)
     ws.cell(row=21, column=1, value="Total de pautas que cumplen criterios").font = bold_font_navy
     ws.cell(row=21, column=2, value=total_cumple).alignment = center_aligned
 
@@ -440,38 +436,31 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     ws['B25'] = responsable
     ws['B25'].alignment = left_aligned
 
-    # APLICACIÓN DELIMITADA DE BORDES (RESPETANDO ESPACIOS EN BLANCO)
-    # 1. Encabezado principal (R1)
+    # APLICACIÓN DELIMITADA DE BORDES
     for c in range(1, 14):
         ws.cell(row=1, column=c).border = thin_border
 
-    # 2. Centro y Mes (R3, R4)
     ws.cell(row=3, column=1).border = thin_border
     ws.cell(row=3, column=2).border = thin_border
     ws.cell(row=4, column=1).border = thin_border
     ws.cell(row=4, column=2).border = thin_border
 
-    # 3. Tabla principal de datos (R5 a R8, Cols 1 a 13)
     for r in range(5, 9):
         for c in range(1, 14):
             ws.cell(row=r, column=c).border = thin_border
 
-    # 4. Tabla de Criterios (R10 a R12, Cols 1 a 13)
     for r in range(10, 13):
         for c in range(1, 14):
             ws.cell(row=r, column=c).border = thin_border
 
-    # 5. Leyendas (R14 a R19, solo Cols A a E / 1 a 5)
     for r in range(14, 20):
         for c in range(1, 6):
             ws.cell(row=r, column=c).border = thin_border
 
-    # 6. Totales (R21 a R23, solo Cols A y B / 1 y 2)
     for r in range(21, 24):
         for c in range(1, 3):
             ws.cell(row=r, column=c).border = thin_border
 
-    # 7. Responsable (R25, solo Cols A a E / 1 a 5)
     ws.cell(row=25, column=1).border = thin_border
     for c in range(2, 6):
         ws.cell(row=25, column=c).border = thin_border
@@ -491,7 +480,6 @@ if st.session_state.pagina_activa == "inicio":
 
     st.markdown("---")
 
-    # Tarjeta 1: Pausa de Seguridad Dental
     st.markdown("""
     <div class="card-pauta">
         <h3 style="margin-top:0; color:#00205B;">🦷 Pausa de Seguridad Dental (GCL 2.1 AO)</h3>
@@ -506,7 +494,6 @@ if st.session_state.pagina_activa == "inicio":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Tarjeta 2: Higiene de Manos
     st.markdown("""
     <div class="card-pauta">
         <h3 style="margin-top:0; color:#00205B;">🧼 Higiene de Manos - Área Dental (GCL 1.2)</h3>
@@ -630,6 +617,12 @@ elif st.session_state.pagina_activa == "pauta_dental":
         st.session_state.pauta_actual = 1
         st.rerun()
 
+    # RESTAURACIÓN TABLA DE RESUMEN
+    pautas_list = [v for v in st.session_state.pautas_data.values() if v is not None]
+    if len(pautas_list) > 0:
+        with st.expander(f"📋 Ver resumen de pautas guardadas ({len(pautas_list)}/18)", expanded=True):
+            st.dataframe(pd.DataFrame(pautas_list), use_container_width=True)
+
 
 # ==============================================================================
 # --- VISTA 3: HIGIENE DE MANOS - ÁREA DENTAL (12 EVALUACIONES) ---
@@ -724,7 +717,8 @@ elif st.session_state.pagina_activa == "pauta_higiene":
         st.session_state.higiene_actual = 1
         st.rerun()
 
+    # RESTAURACIÓN TABLA DE RESUMEN
     higiene_list = [v for v in st.session_state.higiene_data.values() if v is not None]
     if len(higiene_list) > 0:
-        with st.expander(f"📋 Ver resumen de evaluaciones guardadas ({len(higiene_list)}/12)"):
+        with st.expander(f"📋 Ver resumen de evaluaciones guardadas ({len(higiene_list)}/12)", expanded=True):
             st.dataframe(pd.DataFrame(higiene_list), use_container_width=True)
