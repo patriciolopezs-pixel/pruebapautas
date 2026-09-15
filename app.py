@@ -6,9 +6,50 @@ import io
 import datetime
 
 # Configuración de la página web
-st.set_page_config(page_title="Pautas de Supervisión Dental", layout="centered")
+st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="centered")
 
-# --- 1. ESTADO DE LA SESIÓN (MATRIZ DE 18 PAUTAS) ---
+# --- ESTILOS CORPORATIVOS OFICIALES REDSALUD ---
+st.markdown("""
+<style>
+    /* Títulos con el Azul Marino oficial de RedSalud */
+    h1, h2, h3 {
+        color: #00205B !important;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-weight: 700;
+    }
+    
+    /* Botones en Turquesa/Teal RedSalud */
+    div.stButton > button[kind="primary"] {
+        background-color: #00828A !important;
+        border-color: #00828A !important;
+        color: #FFFFFF !important;
+        font-weight: 600;
+        border-radius: 6px;
+    }
+    div.stButton > button[kind="primary"]:hover {
+        background-color: #00666D !important;
+        border-color: #00666D !important;
+    }
+    
+    /* Barra de progreso en Turquesa RedSalud */
+    div.stProgress > div > div > div > div {
+        background-color: #00828A !important;
+    }
+    
+    /* Tarjeta del formulario con borde y fondo sutil */
+    [data-testid="stForm"] {
+        border: 1px solid #D1E5E7;
+        border-top: 5px solid #00828A;
+        border-radius: 8px;
+        padding: 22px;
+        background-color: #F8FCFC;
+        box-shadow: 0px 4px 12px rgba(0, 32, 91, 0.06);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
+# --- 1. ESTADO DE LA SESIÓN ---
 if 'pautas_data' not in st.session_state:
     st.session_state.pautas_data = {i: None for i in range(1, 19)}
 
@@ -19,7 +60,6 @@ if 'ultimo_centro' not in st.session_state:
     st.session_state.ultimo_centro = ""
 
 
-# Helper para convertir texto de fecha a objeto date
 def parse_fecha(fecha_str):
     if fecha_str:
         try:
@@ -29,29 +69,40 @@ def parse_fecha(fecha_str):
     return datetime.date.today()
 
 
-# --- 2. GENERADOR EXCEL CONSOLIDADO ---
+# --- 2. GENERADOR EXCEL (COLORES REDSALUD) ---
 def generar_excel_consolidado(pautas_dict):
     wb = Workbook()
     ws = wb.active
     ws.title = "Consolidado Pautas"
 
-    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
-                         top=Side(style='thin'), bottom=Side(style='thin'))
+    thin_border = Border(
+        left=Side(style='thin', color='B0BEC5'), 
+        right=Side(style='thin', color='B0BEC5'), 
+        top=Side(style='thin', color='B0BEC5'), 
+        bottom=Side(style='thin', color='B0BEC5')
+    )
     center_aligned_text = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left_aligned_text = Alignment(horizontal="left", vertical="center", wrap_text=True)
-    bold_font = Font(bold=True)
-    blue_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    
+    bold_font_white = Font(bold=True, color="FFFFFF")
+    bold_font_navy = Font(bold=True, color="00205B")
+    
+    # Rellenos corporativos RedSalud
+    navy_header_fill = PatternFill(start_color="00205B", end_color="00205B", fill_type="solid")
+    teal_sub_fill = PatternFill(start_color="00828A", end_color="00828A", fill_type="solid")
+    soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
 
-    # Encabezados
+    # Encabezado principal
     ws.merge_cells('A1:AK1')
     ws['A1'] = "PAUTA DE SUPERVISIÓN CUMPLIMIENTO DE PAUSA DE SEGURIDAD DENTAL EN BOX DENTAL, PABELLÓN DE CIRUGÍA MENOR DENTAL E IMAGENOLOGÍA DENTAL (GCL 2.1 AO)"
-    ws['A1'].font = bold_font
+    ws['A1'].font = bold_font_white
+    ws['A1'].fill = navy_header_fill
     ws['A1'].alignment = center_aligned_text
 
     ws['A2'] = "Indicaciones llenado pauta"
     ws.merge_cells('B2:AK2')
     ws['B2'] = "Marque √ SI cumple, Marque X NO cumple, o No Aplica (si corresponde). En ítem cumple registre SI o NO. Registre en observaciones motivo incumplimiento."
-    ws['A2'].font = bold_font
+    ws['A2'].font = bold_font_navy
     ws['B2'].alignment = center_aligned_text
 
     # Etiquetas de filas
@@ -64,22 +115,26 @@ def generar_excel_consolidado(pautas_dict):
     ]
 
     for i, etiqueta in enumerate(etiquetas, start=3):
-        ws.cell(row=i, column=1, value=etiqueta).font = bold_font
+        ws.cell(row=i, column=1, value=etiqueta).font = bold_font_navy
         ws.cell(row=i, column=1).alignment = left_aligned_text
-        ws.cell(row=i, column=1).fill = blue_fill
+        ws.cell(row=i, column=1).fill = soft_teal_fill
 
     ws.column_dimensions['A'].width = 50
 
     # Criterios
-    ws.cell(row=11, column=1, value="N° DE PAUTA").font = bold_font
-    ws.cell(row=12, column=1, value="CRITERIOS A EVALUAR").font = bold_font
+    ws.cell(row=11, column=1, value="N° DE PAUTA").font = bold_font_white
+    ws.cell(row=11, column=1).fill = teal_sub_fill
+    
+    ws.cell(row=12, column=1, value="CRITERIOS A EVALUAR").font = bold_font_white
+    ws.cell(row=12, column=1).fill = teal_sub_fill
+    
     ws.cell(row=13, column=1, value="Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica.")
-    ws.cell(row=14, column=1, value="Cumple (SI/NO)").font = bold_font
-    ws.cell(row=15, column=1, value="Total Cumple").font = bold_font
-    ws.cell(row=11, column=1).fill = blue_fill
-    ws.cell(row=12, column=1).fill = blue_fill
-    ws.cell(row=14, column=1).fill = blue_fill
-    ws.cell(row=15, column=1).fill = blue_fill
+    
+    ws.cell(row=14, column=1, value="Cumple (SI/NO)").font = bold_font_navy
+    ws.cell(row=14, column=1).fill = soft_teal_fill
+    
+    ws.cell(row=15, column=1, value="Total Cumple").font = bold_font_navy
+    ws.cell(row=15, column=1).fill = soft_teal_fill
 
     total_cumple = 0
     total_no_cumple = 0
@@ -99,6 +154,7 @@ def generar_excel_consolidado(pautas_dict):
 
         ws.merge_cells(start_row=11, start_column=col_start, end_row=11, end_column=col_end)
         ws.cell(row=11, column=col_start, value=num_pauta).alignment = center_aligned_text
+        ws.cell(row=11, column=col_start).fill = soft_teal_fill
 
         ws.cell(row=12, column=col_start, value="SI").alignment = center_aligned_text
         ws.cell(row=12, column=col_end, value="NO").alignment = center_aligned_text
@@ -118,7 +174,7 @@ def generar_excel_consolidado(pautas_dict):
     
     ws.merge_cells('D15:E15')
     ws['D15'] = "Total No Cumple"
-    ws['D15'].font = bold_font
+    ws['D15'].font = bold_font_navy
     
     ws.merge_cells('F15:G15')
     ws['F15'] = total_no_cumple
@@ -126,7 +182,7 @@ def generar_excel_consolidado(pautas_dict):
 
     ws.merge_cells('H15:J15')
     ws['H15'] = "% Cumplimiento"
-    ws['H15'].font = bold_font
+    ws['H15'].font = bold_font_navy
 
     completadas = sum(1 for v in pautas_dict.values() if v is not None)
     porcentaje = f"{(total_cumple/18)*100:.1f}%" if completadas == 18 else "-"
@@ -145,15 +201,13 @@ def generar_excel_consolidado(pautas_dict):
 
 
 # --- 3. INTERFAZ DE USUARIO ---
-st.title("🦷 Pausa de Seguridad Dental")
+st.title("RedSalud | Pausa de Seguridad Dental")
 
-# Conteo de pautas guardadas
 completadas = sum(1 for v in st.session_state.pautas_data.values() if v is not None)
 
 st.progress(completadas / 18)
 st.caption(f"Progreso global: **{completadas} de 18 pautas guardadas**")
 
-# Selector de pauta activa
 def formato_opcion(num):
     estado = "✅ Guardada" if st.session_state.pautas_data[num] is not None else "⏳ Pendiente"
     return f"Pauta N° {num} ({estado})"
@@ -165,25 +219,21 @@ pauta_seleccionada = st.selectbox(
     format_func=formato_opcion
 )
 
-# Actualizar pauta activa según selector
 st.session_state.pauta_actual = pauta_seleccionada
 p_num = st.session_state.pauta_actual
 
-# Cargar datos guardados previamente de la pauta elegida (si existen)
 datos_existentes = st.session_state.pautas_data[p_num] or {}
 
-# Opciones de listas
 servicios = [
     "Sala de Procedimiento Dental (BD)", 
     "Pabellón de Cirugía menor Dental (PD)", 
     "Imagenología Dental (RX)"
 ]
 idx_serv = servicios.index(datos_existentes.get('servicio')) if datos_existentes.get('servicio') in servicios else 0
-
 idx_exo = 0 if datos_existentes.get('exodoncia') != "NO" else 1
 idx_cumple = 0 if datos_existentes.get('cumple') != "NO" else 1
 
-# --- FORMULARIO DE LA PAUTA SELECCIONADA ---
+# --- FORMULARIO DE PAUTA ---
 with st.form(key=f"form_pauta_numero_{p_num}"):
     st.subheader(f"Formulario Pauta N° {p_num}")
     
@@ -203,7 +253,6 @@ with st.form(key=f"form_pauta_numero_{p_num}"):
     btn_guardar = st.form_submit_button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True)
 
     if btn_guardar:
-        # Guardar datos en el mapa de la pauta actual
         st.session_state.pautas_data[p_num] = {
             "centro": centro,
             "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
@@ -217,13 +266,11 @@ with st.form(key=f"form_pauta_numero_{p_num}"):
         }
         st.session_state.ultimo_centro = centro
         
-        # Si no es la última pauta, avanzar automáticamente a la siguiente
         if p_num < 18:
             st.session_state.pauta_actual = p_num + 1
         
         st.rerun()
 
-# --- SECCIÓN DE DESCARGA Y RESUMEN ---
 st.markdown("---")
 
 if completadas == 18:
@@ -234,9 +281,9 @@ else:
 excel_file = generar_excel_consolidado(st.session_state.pautas_data)
 
 st.download_button(
-    label="📥 Descargar Excel Consolidado",
+    label="📥 Descargar Excel Consolidado RedSalud",
     data=excel_file,
-    file_name="Consolidado_Pausa_Seguridad_Dental.xlsx",
+    file_name="Consolidado_Pausa_Seguridad_Dental_RedSalud.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     use_container_width=True
 )
@@ -247,7 +294,6 @@ if st.button("🔄 Reiniciar todo y borrar pautas", use_container_width=True):
     st.session_state.pauta_actual = 1
     st.rerun()
 
-# Tabla con resumen de lo que se ha llenado
 pautas_list = [v for v in st.session_state.pautas_data.values() if v is not None]
 if len(pautas_list) > 0:
     with st.expander(f"📋 Ver resumen de pautas guardadas ({len(pautas_list)}/18)"):
