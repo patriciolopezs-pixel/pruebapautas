@@ -5,110 +5,68 @@ from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 import io
 import datetime
 
-# Configuración de la página web
+# Configuración inicial
 st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="centered")
 
-# --- DISEÑO Y CONTRASTE COMPLETO (REDSALUD LIGHT THEME) ---
+# --- CSS DE REFUERZO VISUAL ---
 st.markdown("""
 <style>
-    /* 1. Fondo de la aplicación */
-    html, body, .stApp, [data-testid="stHeader"], [data-testid="stToolbar"] {
+    /* Estructura general */
+    .stApp {
         background-color: #F4F7F6 !important;
-        color: #00205B !important;
     }
     
-    /* 2. Textos, Títulos y Etiquetas de preguntas */
-    h1, h2, h3, h4, h5, h6, label, p, span, div, .stMarkdown {
+    /* Títulos y textos */
+    h1, h2, h3, h4, label, p, span, div {
         color: #00205B !important;
-        font-family: 'Segoe UI', Arial, sans-serif !important;
+        font-family: 'Segoe UI', Tahoma, sans-serif !important;
     }
-    
-    /* 3. Corrección de Cajas de Texto y Selector de Fechas */
-    input, select, textarea, 
-    div[data-baseweb="input"] > div, 
-    div[data-baseweb="select"] > div,
-    div[data-baseweb="base-input"] {
+
+    /* Campos de entrada y Fechas */
+    .stDateInput input, .stTextInput input, div[data-baseweb="select"] {
         background-color: #FFFFFF !important;
         color: #00205B !important;
-        -webkit-text-fill-color: #00205B !important; /* Corrige el texto negro en fechas */
+        -webkit-text-fill-color: #00205B !important;
         border: 1px solid #CBD5E1 !important;
         border-radius: 8px !important;
     }
 
-    /* Popup del Calendario de Fecha */
-    div[data-baseweb="calendar"], div[data-baseweb="popover"] {
-        background-color: #FFFFFF !important;
-        border-radius: 8px !important;
-    }
-    div[data-baseweb="calendar"] * {
-        color: #00205B !important;
-    }
-
-    /* Iconos dentro de las cajas de entrada */
-    svg {
-        fill: #00828A !important;
-    }
-
-    /* 4. Opciones de Radio (SI / NO) */
-    div[role="radiogroup"] label p {
-        color: #00205B !important;
-        font-weight: 600 !important;
-    }
-
-    /* 5. Contenedor de la Pauta (Tarjeta Blanca) */
+    /* Caja del formulario */
     [data-testid="stForm"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0 !important;
         border-top: 6px solid #00828A !important;
         border-radius: 12px !important;
         padding: 24px !important;
-        box-shadow: 0 8px 20px rgba(0, 32, 91, 0.06) !important;
-    }
-
-    /* 6. Estilo Unificado para Todos los Botones */
-    button {
-        border-radius: 8px !important;
-        font-weight: 700 !important;
-        transition: all 0.2s ease !important;
+        box-shadow: 0 4px 12px rgba(0, 32, 91, 0.08) !important;
     }
 
     /* Botón Guardar (Turquesa RedSalud) */
     button[kind="primary"] {
         background-color: #00828A !important;
         border: none !important;
-    }
-    button[kind="primary"] p, button[kind="primary"] span {
-        color: #FFFFFF !important;
-    }
-    button[kind="primary"]:hover {
-        background-color: #00666D !important;
-    }
-
-    /* Botones de Descargar, Reiniciar y Secundarios (Azul Marino RedSalud) */
-    button[kind="secondary"], .stDownloadButton button, button:not([kind="primary"]) {
-        background-color: #00205B !important;
-        border: 1px solid #00205B !important;
-    }
-    button[kind="secondary"] p, button[kind="secondary"] span, 
-    .stDownloadButton button p, .stDownloadButton button span,
-    button:not([kind="primary"]) p, button:not([kind="primary"]) span {
-        color: #FFFFFF !important;
-    }
-    button[kind="secondary"]:hover, .stDownloadButton button:hover {
-        background-color: #001235 !important;
-    }
-
-    /* Tarjeta de Resumen Expandible */
-    div[data-testid="stExpander"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #CBD5E1 !important;
         border-radius: 8px !important;
+    }
+    button[kind="primary"] * {
+        color: #FFFFFF !important;
+        font-weight: bold !important;
+    }
+
+    /* Botones Secundarios y Descarga (Azul Marino RedSalud) */
+    button[kind="secondary"], .stDownloadButton button {
+        background-color: #00205B !important;
+        border: none !important;
+        border-radius: 8px !important;
+    }
+    button[kind="secondary"] *, .stDownloadButton button * {
+        color: #FFFFFF !important;
+        font-weight: bold !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
-# --- 1. ESTADO DE LA SESIÓN ---
+# --- ESTADO DE LA SESIÓN ---
 if 'pautas_data' not in st.session_state:
     st.session_state.pautas_data = {i: None for i in range(1, 19)}
 
@@ -128,7 +86,7 @@ def parse_fecha(fecha_str):
     return datetime.date.today()
 
 
-# --- 2. GENERADOR EXCEL CONSOLIDADO ---
+# --- GENERADOR EXCEL ---
 def generar_excel_consolidado(pautas_dict):
     wb = Workbook()
     ws = wb.active
@@ -150,7 +108,6 @@ def generar_excel_consolidado(pautas_dict):
     teal_sub_fill = PatternFill(start_color="00828A", end_color="00828A", fill_type="solid")
     soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
 
-    # Encabezado principal
     ws.merge_cells('A1:AK1')
     ws['A1'] = "PAUTA DE SUPERVISIÓN CUMPLIMIENTO DE PAUSA DE SEGURIDAD DENTAL EN BOX DENTAL, PABELLÓN DE CIRUGÍA MENOR DENTAL E IMAGENOLOGÍA DENTAL (GCL 2.1 AO)"
     ws['A1'].font = bold_font_white
@@ -163,7 +120,6 @@ def generar_excel_consolidado(pautas_dict):
     ws['A2'].font = bold_font_navy
     ws['B2'].alignment = center_aligned_text
 
-    # Etiquetas de filas
     etiquetas = [
         "Centro", "Fecha de Supervisión", "Nombre de la persona supervisada", 
         "Apellido(s) de la persona supervisada", "RUT del paciente", 
@@ -179,7 +135,6 @@ def generar_excel_consolidado(pautas_dict):
 
     ws.column_dimensions['A'].width = 50
 
-    # Criterios
     ws.cell(row=11, column=1, value="N° DE PAUTA").font = bold_font_white
     ws.cell(row=11, column=1).fill = teal_sub_fill
     
@@ -225,7 +180,6 @@ def generar_excel_consolidado(pautas_dict):
             ws.cell(row=14, column=col_end, value="X").alignment = center_aligned_text
             total_no_cumple += 1
 
-    # Totales
     ws.merge_cells('B15:C15')
     ws['B15'] = total_cumple
     ws['B15'].alignment = center_aligned_text
@@ -258,7 +212,7 @@ def generar_excel_consolidado(pautas_dict):
     return output
 
 
-# --- 3. INTERFAZ DE USUARIO ---
+# --- INTERFAZ ---
 st.title("RedSalud | Pausa de Seguridad Dental")
 
 completadas = sum(1 for v in st.session_state.pautas_data.values() if v is not None)
@@ -291,7 +245,6 @@ idx_serv = servicios.index(datos_existentes.get('servicio')) if datos_existentes
 idx_exo = 0 if datos_existentes.get('exodoncia') != "NO" else 1
 idx_cumple = 0 if datos_existentes.get('cumple') != "NO" else 1
 
-# --- FORMULARIO DE PAUTA ---
 with st.form(key=f"form_pauta_numero_{p_num}"):
     st.subheader(f"Formulario Pauta N° {p_num}")
     
