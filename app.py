@@ -8,60 +8,101 @@ import datetime
 # Configuración de la página web
 st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="centered")
 
-# --- ESTILOS FORZADOS MODO CLARO (REDSALUD) ---
+# --- DISEÑO Y CONTRASTE COMPLETO (REDSALUD LIGHT THEME) ---
 st.markdown("""
 <style>
-    /* Forzar fondo blanco/claro en toda la aplicación */
-    .stApp, [data-testid="stHeader"], [data-testid="stToolbar"] {
-        background-color: #F4F7F8 !important;
-    }
-    
-    /* Forzar color azul marino en todos los textos y etiquetas */
-    p, label, span, div, h1, h2, h3, h4, .stMarkdown {
+    /* 1. Fondo de la aplicación */
+    html, body, .stApp, [data-testid="stHeader"], [data-testid="stToolbar"] {
+        background-color: #F4F7F6 !important;
         color: #00205B !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
     }
     
-    /* Títulos destacados */
-    h1, h2, h3 {
-        font-weight: 700 !important;
+    /* 2. Textos, Títulos y Etiquetas de preguntas */
+    h1, h2, h3, h4, h5, h6, label, p, span, div, .stMarkdown {
+        color: #00205B !important;
+        font-family: 'Segoe UI', Arial, sans-serif !important;
     }
     
-    /* Cajas de entrada de texto, fechas y desplegables */
-    input, select, textarea, div[data-baseweb="select"], div[data-baseweb="input"] {
+    /* 3. Corrección de Cajas de Texto y Selector de Fechas */
+    input, select, textarea, 
+    div[data-baseweb="input"] > div, 
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="base-input"] {
         background-color: #FFFFFF !important;
         color: #00205B !important;
-        border-color: #B0BEC5 !important;
+        -webkit-text-fill-color: #00205B !important; /* Corrige el texto negro en fechas */
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 8px !important;
     }
 
-    /* Modificar apariencia del contenedor del formulario */
-    [data-testid="stForm"] {
-        border: 1px solid #C4D7D9 !important;
-        border-top: 6px solid #00828A !important;
-        border-radius: 10px !important;
-        padding: 24px !important;
+    /* Popup del Calendario de Fecha */
+    div[data-baseweb="calendar"], div[data-baseweb="popover"] {
         background-color: #FFFFFF !important;
-        box-shadow: 0px 4px 14px rgba(0, 32, 91, 0.08) !important;
+        border-radius: 8px !important;
     }
-    
-    /* Botón principal estilo RedSalud (Turquesa con texto blanco) */
-    div.stButton > button[kind="primary"] {
+    div[data-baseweb="calendar"] * {
+        color: #00205B !important;
+    }
+
+    /* Iconos dentro de las cajas de entrada */
+    svg {
+        fill: #00828A !important;
+    }
+
+    /* 4. Opciones de Radio (SI / NO) */
+    div[role="radiogroup"] label p {
+        color: #00205B !important;
+        font-weight: 600 !important;
+    }
+
+    /* 5. Contenedor de la Pauta (Tarjeta Blanca) */
+    [data-testid="stForm"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-top: 6px solid #00828A !important;
+        border-radius: 12px !important;
+        padding: 24px !important;
+        box-shadow: 0 8px 20px rgba(0, 32, 91, 0.06) !important;
+    }
+
+    /* 6. Estilo Unificado para Todos los Botones */
+    button {
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        transition: all 0.2s ease !important;
+    }
+
+    /* Botón Guardar (Turquesa RedSalud) */
+    button[kind="primary"] {
         background-color: #00828A !important;
-        border-color: #00828A !important;
-        border-radius: 6px !important;
+        border: none !important;
     }
-    div.stButton > button[kind="primary"] * {
+    button[kind="primary"] p, button[kind="primary"] span {
         color: #FFFFFF !important;
-        font-weight: bold !important;
     }
-    div.stButton > button[kind="primary"]:hover {
+    button[kind="primary"]:hover {
         background-color: #00666D !important;
-        border-color: #00666D !important;
     }
-    
-    /* Barra de progreso */
-    div.stProgress > div > div > div > div {
-        background-color: #00828A !important;
+
+    /* Botones de Descargar, Reiniciar y Secundarios (Azul Marino RedSalud) */
+    button[kind="secondary"], .stDownloadButton button, button:not([kind="primary"]) {
+        background-color: #00205B !important;
+        border: 1px solid #00205B !important;
+    }
+    button[kind="secondary"] p, button[kind="secondary"] span, 
+    .stDownloadButton button p, .stDownloadButton button span,
+    button:not([kind="primary"]) p, button:not([kind="primary"]) span {
+        color: #FFFFFF !important;
+    }
+    button[kind="secondary"]:hover, .stDownloadButton button:hover {
+        background-color: #001235 !important;
+    }
+
+    /* Tarjeta de Resumen Expandible */
+    div[data-testid="stExpander"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 8px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -87,7 +128,7 @@ def parse_fecha(fecha_str):
     return datetime.date.today()
 
 
-# --- 2. GENERADOR EXCEL (COLORES REDSALUD) ---
+# --- 2. GENERADOR EXCEL CONSOLIDADO ---
 def generar_excel_consolidado(pautas_dict):
     wb = Workbook()
     ws = wb.active
