@@ -7,15 +7,17 @@ import datetime
 import re
 
 # Configuración de la página web
-st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="centered")
+st.set_page_config(page_title="Portal de Pautas de Supervisión - RedSalud", layout="centered")
 
-# --- ESTILOS CSS VISUALES ---
+# --- ESTILOS CSS CORPORATIVOS Y TARJETAS ---
 st.markdown("""
 <style>
+    /* Fondo global */
     .stApp {
         background-color: #F4F7F6 !important;
     }
     
+    /* Encabezados */
     h1, h2, h3, h4 {
         color: #00205B !important;
         font-family: 'Segoe UI', Tahoma, sans-serif !important;
@@ -26,6 +28,7 @@ st.markdown("""
         color: #00205B !important;
     }
 
+    /* Campos de entrada */
     input, select, textarea, div[data-baseweb="select"] {
         background-color: #FFFFFF !important;
         color: #00205B !important;
@@ -35,17 +38,18 @@ st.markdown("""
         text-transform: uppercase !important;
     }
 
+    /* Botón Principal (Turquesa RedSalud) */
     button[kind="primary"] {
         background-color: #00828A !important;
         border: none !important;
         border-radius: 8px !important;
-        margin-top: 10px;
     }
     button[kind="primary"] p {
         color: #FFFFFF !important;
         font-weight: bold !important;
     }
 
+    /* Botón Secundario / Descarga / Volver */
     button[kind="secondary"], .stDownloadButton button {
         background-color: #00205B !important;
         border: none !important;
@@ -56,7 +60,8 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    .pauta-container {
+    /* Estilo para las Tarjetas de la Pantalla de Inicio */
+    .card-pauta {
         background-color: #FFFFFF;
         border: 1px solid #E2E8F0;
         border-top: 6px solid #00828A;
@@ -65,11 +70,24 @@ st.markdown("""
         margin-bottom: 20px;
         box-shadow: 0 4px 12px rgba(0, 32, 91, 0.08);
     }
+
+    .card-pauta-future {
+        background-color: #FAFAFA;
+        border: 1px dashed #CBD5E1;
+        border-top: 6px solid #B0BEC5;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        opacity: 0.8;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 
-# --- 1. ESTADO DE LA SESIÓN ---
+# --- 1. ESTADO DE LA SESIÓN Y NAVEGACIÓN ---
+if 'pagina_activa' not in st.session_state:
+    st.session_state.pagina_activa = "inicio"
+
 if 'pautas_data' not in st.session_state:
     st.session_state.pautas_data = {i: None for i in range(1, 19)}
 
@@ -94,7 +112,6 @@ def parse_fecha(fecha_str):
 
 # --- 2. LÓGICA DE CARGA MASIVA ---
 def procesar_df_masivo(df, fecha_sup_default):
-    # Normalizar encabezados
     df.columns = [str(c).strip().lower() for c in df.columns]
     
     def get_val(row, candidates, default=""):
@@ -114,21 +131,18 @@ def procesar_df_masivo(df, fecha_sup_default):
         centro_val = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', get_val(row, ['centro'])).strip().upper()
         rut_val = re.sub(r'[^0-9kK\-]', '', get_val(row, ['rut paciente', 'rut_paciente'])).strip().upper()
         
-        # Nombre y Apellidos del profesional
         nom_prof = get_val(row, ['nombre profesional', 'nombre realizador', 'nombre persona'])
         ape_prof = get_val(row, ['apellidos profesional', 'apellido realizador', 'apellidos persona', 'apellido persona'])
         
         nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nom_prof).strip().upper()
         apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', ape_prof).strip().upper()
         
-        # Fecha de atención
         fecha_atencion_raw = get_val(row, ['fecha de ejecución', 'fecha atencion', 'fecha_atencion', 'fecha'])
         try:
             fecha_atencion_clean = pd.to_datetime(fecha_atencion_raw).strftime("%d-%m-%Y")
         except Exception:
             fecha_atencion_clean = fecha_sup_default.strftime("%d-%m-%Y")
             
-        # Servicio Clínico
         serv_raw = get_val(row, ['servicio']).lower()
         if 'pabell' in serv_raw or 'pd' in serv_raw:
             serv_clean = "Pabellón de Cirugía menor Dental (PD)"
@@ -137,11 +151,9 @@ def procesar_df_masivo(df, fecha_sup_default):
         else:
             serv_clean = "Sala de Procedimiento Dental (BD)"
             
-        # Exodoncia
         exo_raw = get_val(row, ['exodoncia', 'prestación corresponde']).upper()
         exo_clean = "SI" if "SI" in exo_raw else "NO"
 
-        # Mantener evaluación existente o predeterminar SI
         cumple_existente = "SI"
         if st.session_state.pautas_data[num_pauta] is not None:
             cumple_existente = st.session_state.pautas_data[num_pauta].get("cumple", "SI")
@@ -271,7 +283,6 @@ def generar_excel_consolidado(pautas_dict):
         else:
             ws.merge_cells(start_row=14, start_column=col_start, end_row=14, end_column=col_end)
 
-    # Totales
     ws.merge_cells('B15:F15')
     ws['B15'] = total_cumple
     ws['B15'].alignment = center_aligned_text
@@ -296,7 +307,6 @@ def generar_excel_consolidado(pautas_dict):
     ws['S15'] = porcentaje
     ws['S15'].alignment = center_aligned_text
 
-    # Observaciones y Timbre
     ws.merge_cells('A16:Q20')
     ws['A16'] = "Observaciones:"
     ws['A16'].font = bold_font_navy
@@ -326,151 +336,195 @@ def generar_excel_consolidado(pautas_dict):
     return output
 
 
-# --- 4. INTERFAZ DE USUARIO ---
-st.title("RedSalud | Pausa de Seguridad Dental")
+# ==============================================================================
+# --- VISTA 1: PANTALLA DE INICIO (PORTAL DE PAUTAS) ---
+# ==============================================================================
+if st.session_state.pagina_activa == "inicio":
+    st.title("RedSalud | Portal de Pautas de Supervisión")
+    st.write("Bienvenido al sistema de consolidación de pautas de supervisión clínica. Seleccione la pauta que desea evaluar:")
 
-# --- MÓDULO DE CARGA MASIVA (EXPANDER) ---
-with st.expander("📥 **Carga Masiva Mensual (Copiar y Pegar desde Excel / Archivo)**", expanded=False):
-    st.write("Copia la tabla desde Excel y pégala abajo, o sube el archivo directamente:")
+    st.markdown("---")
+
+    # Tarjeta 1: Pausa de Seguridad Dental
+    st.markdown("""
+    <div class="card-pauta">
+        <h3 style="margin-top:0; color:#00205B;">🦷 Pausa de Seguridad Dental (GCL 2.1 AO)</h3>
+        <p>Evaluación de cumplimiento de Pausa de Seguridad Dental en Box Dental, Pabellón de Cirugía Menor e Imagenología Dental.</p>
+        <p><b>Capacidad:</b> 18 Pautas de Supervisión por Consolidado.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    fecha_sup_masiva = st.date_input("Fecha de Supervisión para el lote:", value=datetime.date.today())
+    if st.button("🚀 Ingresar a Pauta de Seguridad Dental", type="primary", use_container_width=True):
+        st.session_state.pagina_activa = "pauta_dental"
+        st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Tarjeta 2: Próximas Pautas (Placeholder)
+    st.markdown("""
+    <div class="card-pauta-future">
+        <h3 style="margin-top:0; color:#00205B;">📋 Próximas Pautas de Supervisión</h3>
+        <p>Espacio reservado para incorporar nuevas pautas institucionales (Higiene de Manos, Seguridad Quirúrgica, EPP, etc.).</p>
+        <p><i>Estado: En desarrollo...</i></p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ==============================================================================
+# --- VISTA 2: APLICACIÓN PAUSA DE SEGURIDAD DENTAL ---
+# ==============================================================================
+elif st.session_state.pagina_activa == "pauta_dental":
     
-    tab1, tab2 = st.tabs(["📋 Pegar Texto desde Excel", "📁 Subir Archivo Excel/CSV"])
-    
-    with tab1:
-        texto_pegado = st.text_area("Pega la tabla copiada desde Excel aquí:", height=150, placeholder="Pega aquí las filas copiadas directamente de tu Excel...")
-        if st.button("⚡ Procesar Texto Pegado", type="primary"):
-            if texto_pegado.strip():
-                try:
-                    df_pasted = pd.read_csv(io.StringIO(texto_pegado), sep='\t')
-                    cargadas = procesar_df_masivo(df_pasted, fecha_sup_masiva)
-                    st.success(f"✅ ¡Se cargaron {cargadas} pautas automáticamente!")
-                    st.rerun()
-                except Exception as e:
-                    st.error("Ocurrió un error al leer el texto. Asegúrate de copiar las columnas completas desde Excel.")
-            else:
-                st.warning("Por favor pega algún texto antes de procesar.")
-                
-    with tab2:
-        archivo_subido = st.file_uploader("Selecciona archivo Excel (.xlsx) o CSV:", type=["xlsx", "csv"])
-        if st.button("⚡ Procesar Archivo Subido", type="primary"):
-            if archivo_subido is not None:
-                try:
-                    if archivo_subido.name.endswith('.csv'):
-                        df_file = pd.read_csv(archivo_subido)
-                    else:
-                        df_file = pd.read_excel(archivo_subido)
-                    cargadas = procesar_df_masivo(df_file, fecha_sup_masiva)
-                    st.success(f"✅ ¡Se cargaron {cargadas} pautas automáticamente!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error al leer el archivo: {e}")
-            else:
-                st.warning("Selecciona un archivo antes de procesar.")
+    # Botón para volver al inicio
+    if st.button("⬅️ Volver al Portal de Inicio", use_container_width=True):
+        st.session_state.pagina_activa = "inicio"
+        st.rerun()
 
-st.markdown("---")
+    st.markdown("---")
+    st.title("RedSalud | Pausa de Seguridad Dental")
 
-completadas = sum(1 for v in st.session_state.pautas_data.values() if v is not None)
+    # MÓDULO DE CARGA MASIVA
+    with st.expander("📥 **Carga Masiva Mensual (Copiar y Pegar desde Excel / Archivo)**", expanded=False):
+        st.write("Copia la tabla desde Excel y pégala abajo, o sube el archivo directamente:")
+        
+        fecha_sup_masiva = st.date_input("Fecha de Supervisión para el lote:", value=datetime.date.today())
+        
+        tab1, tab2 = st.tabs(["📋 Pegar Texto desde Excel", "📁 Subir Archivo Excel/CSV"])
+        
+        with tab1:
+            texto_pegado = st.text_area("Pega la tabla copiada desde Excel aquí:", height=150, placeholder="Pega aquí las filas copiadas directamente de tu Excel...")
+            if st.button("⚡ Procesar Texto Pegado", type="primary"):
+                if texto_pegado.strip():
+                    try:
+                        df_pasted = pd.read_csv(io.StringIO(texto_pegado), sep='\t')
+                        cargadas = procesar_df_masivo(df_pasted, fecha_sup_masiva)
+                        st.success(f"✅ ¡Se cargaron {cargadas} pautas automáticamente!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error("Ocurrió un error al leer el texto. Asegúrate de copiar las columnas completas desde Excel.")
+                else:
+                    st.warning("Por favor pega algún texto antes de procesar.")
+                    
+        with tab2:
+            archivo_subido = st.file_uploader("Selecciona archivo Excel (.xlsx) o CSV:", type=["xlsx", "csv"])
+            if st.button("⚡ Procesar Archivo Subido", type="primary"):
+                if archivo_subido is not None:
+                    try:
+                        if archivo_subido.name.endswith('.csv'):
+                            df_file = pd.read_csv(archivo_subido)
+                        else:
+                            df_file = pd.read_excel(archivo_subido)
+                        cargadas = procesar_df_masivo(df_file, fecha_sup_masiva)
+                        st.success(f"✅ ¡Se cargaron {cargadas} pautas automáticamente!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error al leer el archivo: {e}")
+                else:
+                    st.warning("Selecciona un archivo antes de procesar.")
 
-st.progress(completadas / 18)
-st.caption(f"Progreso global: **{completadas} de 18 pautas guardadas**")
+    st.markdown("---")
 
-def formato_opcion(num):
-    estado = "✅ Guardada" if st.session_state.pautas_data[num] is not None else "⏳ Pendiente"
-    return f"Pauta N° {num} ({estado})"
+    completadas = sum(1 for v in st.session_state.pautas_data.values() if v is not None)
 
-pauta_seleccionada = st.selectbox(
-    "Selecciona la pauta a ingresar o revisar:",
-    options=list(range(1, 19)),
-    index=st.session_state.pauta_actual - 1,
-    format_func=formato_opcion
-)
+    st.progress(completadas / 18)
+    st.caption(f"Progreso global: **{completadas} de 18 pautas guardadas**")
 
-st.session_state.pauta_actual = pauta_seleccionada
-p_num = st.session_state.pauta_actual
+    def formato_opcion(num):
+        estado = "✅ Guardada" if st.session_state.pautas_data[num] is not None else "⏳ Pendiente"
+        return f"Pauta N° {num} ({estado})"
 
-datos_existentes = st.session_state.pautas_data[p_num] or {}
+    pauta_seleccionada = st.selectbox(
+        "Selecciona la pauta a ingresar o revisar:",
+        options=list(range(1, 19)),
+        index=st.session_state.pauta_actual - 1,
+        format_func=formato_opcion
+    )
 
-servicios = [
-    "Sala de Procedimiento Dental (BD)", 
-    "Pabellón de Cirugía menor Dental (PD)", 
-    "Imagenología Dental (RX)"
-]
-idx_serv = servicios.index(datos_existentes.get('servicio')) if datos_existentes.get('servicio') in servicios else 0
-idx_exo = 0 if datos_existentes.get('exodoncia') != "NO" else 1
-idx_cumple = 0 if datos_existentes.get('cumple') != "NO" else 1
+    st.session_state.pauta_actual = pauta_seleccionada
+    p_num = st.session_state.pauta_actual
 
-# Formulario libre
-st.markdown('<div class="pauta-container">', unsafe_allow_html=True)
-st.subheader(f"Formulario Pauta N° {p_num}")
+    datos_existentes = st.session_state.pautas_data[p_num] or {}
 
-centro = st.text_input("Centro", value=datos_existentes.get('centro', st.session_state.ultimo_centro), key=f"c_{p_num}")
-fecha_sup = st.date_input("Fecha de Supervisión", value=parse_fecha(datos_existentes.get('fecha_sup')), key=f"fs_{p_num}")
+    servicios = [
+        "Sala de Procedimiento Dental (BD)", 
+        "Pabellón de Cirugía menor Dental (PD)", 
+        "Imagenología Dental (RX)"
+    ]
+    idx_serv = servicios.index(datos_existentes.get('servicio')) if datos_existentes.get('servicio') in servicios else 0
+    idx_exo = 0 if datos_existentes.get('exodoncia') != "NO" else 1
+    idx_cumple = 0 if datos_existentes.get('cumple') != "NO" else 1
 
-nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''), key=f"n_{p_num}")
-apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''), key=f"a_{p_num}")
+    # Formulario libre
+    st.markdown('<div class="card-pauta">', unsafe_allow_html=True)
+    st.subheader(f"Formulario Pauta N° {p_num}")
 
-rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), key=f"r_{p_num}")
-fecha_atencion = st.date_input("Fecha de Atención supervisada", value=parse_fecha(datos_existentes.get('fecha_atencion')), key=f"fa_{p_num}")
+    centro = st.text_input("Centro", value=datos_existentes.get('centro', st.session_state.ultimo_centro), key=f"c_{p_num}")
+    fecha_sup = st.date_input("Fecha de Supervisión", value=parse_fecha(datos_existentes.get('fecha_sup')), key=f"fs_{p_num}")
 
-servicio = st.selectbox("Servicio Clínico", servicios, index=idx_serv, key=f"s_{p_num}")
-exodoncia = st.radio("¿Procedimiento corresponde a Exodoncia?", ["SI", "NO"], index=idx_exo, key=f"e_{p_num}")
+    nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''), key=f"n_{p_num}", help="Solo letras permitidas")
+    apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''), key=f"a_{p_num}", help="Solo letras permitidas")
 
-st.markdown("---")
-st.markdown("**CRITERIO A EVALUAR**")
-cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica?", ["SI", "NO"], index=idx_cumple, key=f"cu_{p_num}")
+    rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), key=f"r_{p_num}", help="Solo números, guion y K. Ejemplo: 12345678-K")
+    fecha_atencion = st.date_input("Fecha de Atención supervisada", value=parse_fecha(datos_existentes.get('fecha_atencion')), key=f"fa_{p_num}")
 
-btn_guardar = st.button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True, key=f"btn_{p_num}")
+    servicio = st.selectbox("Servicio Clínico", servicios, index=idx_serv, key=f"s_{p_num}")
+    exodoncia = st.radio("¿Procedimiento corresponde a Exodoncia?", ["SI", "NO"], index=idx_exo, key=f"e_{p_num}")
 
-if btn_guardar:
-    nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre).strip().upper()
-    apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', apellido).strip().upper()
-    centro_clean = centro.strip().upper()
-    rut_clean = re.sub(r'[^0-9kK\-]', '', rut).strip().upper()
+    st.markdown("---")
+    st.markdown("**CRITERIO A EVALUAR**")
+    cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica?", ["SI", "NO"], index=idx_cumple, key=f"cu_{p_num}")
 
-    st.session_state.pautas_data[p_num] = {
-        "centro": centro_clean,
-        "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
-        "nombre": nombre_clean,
-        "apellido": apellido_clean,
-        "rut": rut_clean,
-        "fecha_atencion": fecha_atencion.strftime("%d-%m-%Y"),
-        "servicio": servicio,
-        "exodoncia": exodoncia,
-        "cumple": cumple
-    }
-    st.session_state.ultimo_centro = centro_clean
-    
-    if p_num < 18:
-        st.session_state.pauta_actual = p_num + 1
-    
-    st.rerun()
+    btn_guardar = st.button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True, key=f"btn_{p_num}")
 
-st.markdown('</div>', unsafe_allow_html=True)
+    if btn_guardar:
+        nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre).strip().upper()
+        apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', apellido).strip().upper()
+        centro_clean = centro.strip().upper()
+        rut_clean = re.sub(r'[^0-9kK\-]', '', rut).strip().upper()
 
-# Resumen y descarga
-if completadas == 18:
-    st.success("🎉 ¡Has completado las 18 pautas exitosamente!")
-else:
-    st.info(f"Faltan **{18 - completadas} pautas** por completar para finalizar el proceso.")
+        st.session_state.pautas_data[p_num] = {
+            "centro": centro_clean,
+            "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
+            "nombre": nombre_clean,
+            "apellido": apellido_clean,
+            "rut": rut_clean,
+            "fecha_atencion": fecha_atencion.strftime("%d-%m-%Y"),
+            "servicio": servicio,
+            "exodoncia": exodoncia,
+            "cumple": cumple
+        }
+        st.session_state.ultimo_centro = centro_clean
+        
+        if p_num < 18:
+            st.session_state.pauta_actual = p_num + 1
+        
+        st.rerun()
 
-excel_file = generar_excel_consolidado(st.session_state.pautas_data)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-st.download_button(
-    label="📥 Descargar Excel Consolidado",
-    data=excel_file,
-    file_name="Consolidado_Pausa_Seguridad_Dental.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    use_container_width=True
-)
+    # Resumen y descarga
+    if completadas == 18:
+        st.success("🎉 ¡Has completado las 18 pautas exitosamente!")
+    else:
+        st.info(f"Faltan **{18 - completadas} pautas** por completar para finalizar el proceso.")
 
-if st.button("🔄 Reiniciar todo y borrar pautas", use_container_width=True):
-    st.session_state.pautas_data = {i: None for i in range(1, 19)}
-    st.session_state.ultimo_centro = ""
-    st.session_state.pauta_actual = 1
-    st.rerun()
+    excel_file = generar_excel_consolidado(st.session_state.pautas_data)
 
-pautas_list = [v for v in st.session_state.pautas_data.values() if v is not None]
-if len(pautas_list) > 0:
-    with st.expander(f"📋 Ver resumen de pautas guardadas ({len(pautas_list)}/18)"):
-        st.dataframe(pd.DataFrame(pautas_list), use_container_width=True)
+    st.download_button(
+        label="📥 Descargar Excel Consolidado",
+        data=excel_file,
+        file_name="Consolidado_Pausa_Seguridad_Dental.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
+
+    if st.button("🔄 Reiniciar todo y borrar pautas", use_container_width=True):
+        st.session_state.pautas_data = {i: None for i in range(1, 19)}
+        st.session_state.ultimo_centro = ""
+        st.session_state.pauta_actual = 1
+        st.rerun()
+
+    pautas_list = [v for v in st.session_state.pautas_data.values() if v is not None]
+    if len(pautas_list) > 0:
+        with st.expander(f"📋 Ver resumen de pautas guardadas ({len(pautas_list)}/18)"):
+            st.dataframe(pd.DataFrame(pautas_list), use_container_width=True)
