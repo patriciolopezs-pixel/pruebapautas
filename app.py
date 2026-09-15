@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
@@ -7,22 +8,36 @@ import io
 # Configuración de la página web
 st.set_page_config(page_title="Pautas de Supervisión Dental", layout="centered")
 
-# Inyección de HTML/JavaScript para forzar el scroll al inicio en móviles
-st.markdown("""
-<script>
-    var body = window.parent.document.querySelector(".main");
-    if(body) {
-        body.scrollTop = 0;
-    }
-</script>
-""", unsafe_allow_html=True)
-
-
-# Inicializar variables en sesión para guardar las pautas y el último centro
+# Inicializar variables en sesión
 if 'pautas' not in st.session_state:
     st.session_state.pautas = []
 if 'ultimo_centro' not in st.session_state:
     st.session_state.ultimo_centro = ""
+if 'subir_pantalla' not in st.session_state:
+    st.session_state.subir_pantalla = False
+
+# Ejecutar el scroll hacia arriba solo cuando se guarda una pauta
+if st.session_state.subir_pantalla:
+    components.html(
+        """
+        <script>
+            try {
+                var mainContainer = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
+                if (mainContainer) {
+                    mainContainer.scrollTop = 0;
+                } else {
+                    window.parent.scrollTo(0, 0);
+                }
+            } catch (e) {
+                console.log(e);
+            }
+        </script>
+        """,
+        height=0,
+        width=0
+    )
+    st.session_state.subir_pantalla = False
+
 
 def generar_excel_consolidado(pautas):
     wb = Workbook()
@@ -150,12 +165,10 @@ st.caption(f"Pautas ingresadas: **{pautas_ingresadas} de 18**")
 if pautas_ingresadas < 18:
     st.subheader(f"Pauta N° {pautas_ingresadas + 1}")
     
-    # Formulario alineado en una sola columna vertical para móviles
-    with st.form("form_pauta", clear_on_submit=True):
+    # Se asigna una clave dinámica para reiniciar los campos en cada pauta
+    with st.form(f"form_pauta_{pautas_ingresadas}", clear_on_submit=True):
         
-        # El campo Centro toma el valor guardado en la sesión
         centro = st.text_input("Centro", value=st.session_state.ultimo_centro)
-        
         fecha_sup = st.date_input("Fecha de Supervisión")
         nombre = st.text_input("Nombre de la persona supervisada")
         apellido = st.text_input("Apellido(s) de la persona supervisada")
@@ -187,10 +200,12 @@ if pautas_ingresadas < 18:
                 "exodoncia": exodoncia,
                 "cumple": cumple
             })
-            # 2. Guardar el centro ingresado para la próxima pauta
+            # 2. Guardar el centro ingresado
             st.session_state.ultimo_centro = centro
             
-            # 3. Recargar la página
+            # 3. Indicar que debe volver al inicio de la página en la recarga
+            st.session_state.subir_pantalla = True
+            
             st.rerun()
 else:
     st.success("✅ ¡Se han completado las 18 pautas!")
@@ -207,5 +222,6 @@ else:
 
     if st.button("Reiniciar y crear nuevo consolidado", use_container_width=True):
         st.session_state.pautas = []
-        st.session_state.ultimo_centro = "" # Opcional: borrar el centro al reiniciar
+        st.session_state.ultimo_centro = ""
+        st.session_state.subir_pantalla = True
         st.rerun()
