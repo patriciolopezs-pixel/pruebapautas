@@ -7,9 +7,22 @@ import io
 # Configuración de la página web
 st.set_page_config(page_title="Pautas de Supervisión Dental", layout="centered")
 
-# Inicializar variables en sesión para guardar las 18 pautas
+# Inyección de HTML/JavaScript para forzar el scroll al inicio en móviles
+st.markdown("""
+<script>
+    var body = window.parent.document.querySelector(".main");
+    if(body) {
+        body.scrollTop = 0;
+    }
+</script>
+""", unsafe_allow_html=True)
+
+
+# Inicializar variables en sesión para guardar las pautas y el último centro
 if 'pautas' not in st.session_state:
     st.session_state.pautas = []
+if 'ultimo_centro' not in st.session_state:
+    st.session_state.ultimo_centro = ""
 
 def generar_excel_consolidado(pautas):
     wb = Workbook()
@@ -139,7 +152,10 @@ if pautas_ingresadas < 18:
     
     # Formulario alineado en una sola columna vertical para móviles
     with st.form("form_pauta", clear_on_submit=True):
-        centro = st.text_input("Centro")
+        
+        # El campo Centro toma el valor guardado en la sesión
+        centro = st.text_input("Centro", value=st.session_state.ultimo_centro)
+        
         fecha_sup = st.date_input("Fecha de Supervisión")
         nombre = st.text_input("Nombre de la persona supervisada")
         apellido = st.text_input("Apellido(s) de la persona supervisada")
@@ -159,6 +175,7 @@ if pautas_ingresadas < 18:
         btn_guardar = st.form_submit_button("Guardar Pauta", type="primary", use_container_width=True)
 
         if btn_guardar:
+            # 1. Guardar la pauta
             st.session_state.pautas.append({
                 "centro": centro,
                 "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
@@ -170,6 +187,10 @@ if pautas_ingresadas < 18:
                 "exodoncia": exodoncia,
                 "cumple": cumple
             })
+            # 2. Guardar el centro ingresado para la próxima pauta
+            st.session_state.ultimo_centro = centro
+            
+            # 3. Recargar la página
             st.rerun()
 else:
     st.success("✅ ¡Se han completado las 18 pautas!")
@@ -186,4 +207,5 @@ else:
 
     if st.button("Reiniciar y crear nuevo consolidado", use_container_width=True):
         st.session_state.pautas = []
+        st.session_state.ultimo_centro = "" # Opcional: borrar el centro al reiniciar
         st.rerun()
