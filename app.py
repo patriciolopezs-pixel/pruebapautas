@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
+from openpyxl.utils import get_column_letter
 import io
 import datetime
 import re
@@ -380,7 +381,7 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
         num = idx + 1
         col = idx + 2
         
-        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 15
+        ws.column_dimensions[get_column_letter(col)].width = 15
         
         ws.cell(row=5, column=col, value=num).alignment = center_aligned
         ws.cell(row=5, column=col).font = bold_font_navy
@@ -439,7 +440,6 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
                 ws.cell(row=r, column=c).border = thin_border
 
     output = io.BytesIO()
-    import openpyxl.utils
     wb.save(output)
     output.seek(0)
     return output
@@ -639,7 +639,6 @@ elif st.session_state.pagina_activa == "pauta_higiene":
     st.markdown("---")
     st.markdown("**CRITERIOS A EVALUAR**")
 
-    # Lista de Oportunidades
     oportunidades_map = {
         "1": "1. Antes del contacto con el paciente",
         "2": "2. Antes de una técnica aséptica",
