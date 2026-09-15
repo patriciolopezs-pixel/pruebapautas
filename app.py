@@ -8,42 +8,60 @@ import datetime
 # Configuración de la página web
 st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="centered")
 
-# --- ESTILOS CORPORATIVOS OFICIALES REDSALUD ---
+# --- ESTILOS FORZADOS MODO CLARO (REDSALUD) ---
 st.markdown("""
 <style>
-    /* Títulos con el Azul Marino oficial de RedSalud */
-    h1, h2, h3 {
-        color: #00205B !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        font-weight: 700;
+    /* Forzar fondo blanco/claro en toda la aplicación */
+    .stApp, [data-testid="stHeader"], [data-testid="stToolbar"] {
+        background-color: #F4F7F8 !important;
     }
     
-    /* Botones en Turquesa/Teal RedSalud */
+    /* Forzar color azul marino en todos los textos y etiquetas */
+    p, label, span, div, h1, h2, h3, h4, .stMarkdown {
+        color: #00205B !important;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+    }
+    
+    /* Títulos destacados */
+    h1, h2, h3 {
+        font-weight: 700 !important;
+    }
+    
+    /* Cajas de entrada de texto, fechas y desplegables */
+    input, select, textarea, div[data-baseweb="select"], div[data-baseweb="input"] {
+        background-color: #FFFFFF !important;
+        color: #00205B !important;
+        border-color: #B0BEC5 !important;
+    }
+
+    /* Modificar apariencia del contenedor del formulario */
+    [data-testid="stForm"] {
+        border: 1px solid #C4D7D9 !important;
+        border-top: 6px solid #00828A !important;
+        border-radius: 10px !important;
+        padding: 24px !important;
+        background-color: #FFFFFF !important;
+        box-shadow: 0px 4px 14px rgba(0, 32, 91, 0.08) !important;
+    }
+    
+    /* Botón principal estilo RedSalud (Turquesa con texto blanco) */
     div.stButton > button[kind="primary"] {
         background-color: #00828A !important;
         border-color: #00828A !important;
+        border-radius: 6px !important;
+    }
+    div.stButton > button[kind="primary"] * {
         color: #FFFFFF !important;
-        font-weight: 600;
-        border-radius: 6px;
+        font-weight: bold !important;
     }
     div.stButton > button[kind="primary"]:hover {
         background-color: #00666D !important;
         border-color: #00666D !important;
     }
     
-    /* Barra de progreso en Turquesa RedSalud */
+    /* Barra de progreso */
     div.stProgress > div > div > div > div {
         background-color: #00828A !important;
-    }
-    
-    /* Tarjeta del formulario con borde y fondo sutil */
-    [data-testid="stForm"] {
-        border: 1px solid #D1E5E7;
-        border-top: 5px solid #00828A;
-        border-radius: 8px;
-        padding: 22px;
-        background-color: #F8FCFC;
-        box-shadow: 0px 4px 12px rgba(0, 32, 91, 0.06);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -87,7 +105,6 @@ def generar_excel_consolidado(pautas_dict):
     bold_font_white = Font(bold=True, color="FFFFFF")
     bold_font_navy = Font(bold=True, color="00205B")
     
-    # Rellenos corporativos RedSalud
     navy_header_fill = PatternFill(start_color="00205B", end_color="00205B", fill_type="solid")
     teal_sub_fill = PatternFill(start_color="00828A", end_color="00828A", fill_type="solid")
     soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
