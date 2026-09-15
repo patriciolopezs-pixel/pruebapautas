@@ -9,27 +9,26 @@ import re
 # Configuración de la página web
 st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="centered")
 
-# --- ESTILOS Y RESTRICCIÓN DE TECLADO EN TIEMPO REAL (JS) ---
+# --- ESTILOS CSS VISUALES (REDSALUD MODO CLARO) ---
 st.markdown("""
 <style>
-    /* Fondo global */
+    /* Fondo global de la aplicación */
     .stApp {
         background-color: #F4F7F6 !important;
     }
     
-    /* Encabezados */
+    /* Títulos e instrucciones */
     h1, h2, h3, h4 {
         color: #00205B !important;
         font-family: 'Segoe UI', Tahoma, sans-serif !important;
         font-weight: 700 !important;
     }
     
-    /* Textos y Etiquetas de preguntas */
-    .stMarkdown, label, p {
+    .stMarkdown, label, p, span {
         color: #00205B !important;
     }
 
-    /* Campos de entrada: Forzar visualización en MAYÚSCULAS */
+    /* Campos de texto y selección */
     input, select, textarea, div[data-baseweb="select"] {
         background-color: #FFFFFF !important;
         color: #00205B !important;
@@ -39,28 +38,19 @@ st.markdown("""
         text-transform: uppercase !important;
     }
 
-    /* Contenedor del Formulario (Tarjeta Blanca) */
-    [data-testid="stForm"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
-        border-top: 6px solid #00828A !important;
-        border-radius: 12px !important;
-        padding: 24px !important;
-        box-shadow: 0 4px 12px rgba(0, 32, 91, 0.08) !important;
-    }
-
     /* Botón Guardar (Turquesa RedSalud) */
     button[kind="primary"] {
         background-color: #00828A !important;
         border: none !important;
         border-radius: 8px !important;
+        margin-top: 15px;
     }
     button[kind="primary"] p {
         color: #FFFFFF !important;
         font-weight: bold !important;
     }
 
-    /* Botones Secundarios y Descargar (Azul Marino RedSalud) */
+    /* Botones Secundarios y Descarga */
     button[kind="secondary"], .stDownloadButton button {
         background-color: #00205B !important;
         border: none !important;
@@ -71,50 +61,17 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* Cuadro de Resumen Desplegable */
-    div[data-testid="stExpander"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #CBD5E1 !important;
-        border-radius: 8px !important;
+    /* Cuadro contenedor personalizado */
+    .pauta-container {
+        background-color: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-top: 6px solid #00828A;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 32, 91, 0.08);
     }
 </style>
-
-<script>
-// Script de bloqueo de caracteres en tiempo real
-(function() {
-    const doc = window.parent.document;
-    
-    function aplicarRestricciones() {
-        const inputs = doc.querySelectorAll('input');
-        inputs.forEach(input => {
-            const label = input.getAttribute('aria-label') || '';
-            
-            // Restricción para Nombre y Apellido (Solo letras, tildes, Ñ y espacios)
-            if (label.includes('Nombre') || label.includes('Apellido')) {
-                if (!input.dataset.restrictedLetters) {
-                    input.dataset.restrictedLetters = "true";
-                    input.addEventListener('input', function() {
-                        this.value = this.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '').toUpperCase();
-                    });
-                }
-            }
-            
-            // Restricción para RUT (Solo números, guion y letra K)
-            if (label.includes('RUT')) {
-                if (!input.dataset.restrictedRut) {
-                    input.dataset.restrictedRut = "true";
-                    input.addEventListener('input', function() {
-                        this.value = this.value.replace(/[^0-9kK\-]/g, '').toUpperCase();
-                    });
-                }
-            }
-        });
-    }
-    
-    // Verificación continua para campos dinámicos
-    setInterval(aplicarRestricciones, 300);
-})();
-</script>
 """, unsafe_allow_html=True)
 
 
@@ -297,52 +254,56 @@ idx_serv = servicios.index(datos_existentes.get('servicio')) if datos_existentes
 idx_exo = 0 if datos_existentes.get('exodoncia') != "NO" else 1
 idx_cumple = 0 if datos_existentes.get('cumple') != "NO" else 1
 
-# --- FORMULARIO DE PAUTA ---
-with st.form(key=f"form_pauta_numero_{p_num}"):
-    st.subheader(f"Formulario Pauta N° {p_num}")
-    
-    centro = st.text_input("Centro", value=datos_existentes.get('centro', st.session_state.ultimo_centro))
-    fecha_sup = st.date_input("Fecha de Supervisión", value=parse_fecha(datos_existentes.get('fecha_sup')))
-    nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''))
-    apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''))
-    rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), help="Ejemplo: 12345678-K")
-    fecha_atencion = st.date_input("Fecha de Atención supervisada", value=parse_fecha(datos_existentes.get('fecha_atencion')))
-    servicio = st.selectbox("Servicio Clínico", servicios, index=idx_serv)
-    exodoncia = st.radio("¿Procedimiento corresponde a Exodoncia?", ["SI", "NO"], index=idx_exo)
+# --- FORMULARIO LIBRE (SIN st.form PARA EVITAR SUBMIT CON ENTER) ---
+st.markdown('<div class="pauta-container">', unsafe_allow_html=True)
+st.subheader(f"Formulario Pauta N° {p_num}")
 
-    st.markdown("---")
-    st.markdown("**CRITERIO A EVALUAR**")
-    cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica?", ["SI", "NO"], index=idx_cumple)
+centro = st.text_input("Centro", value=datos_existentes.get('centro', st.session_state.ultimo_centro), key=f"c_{p_num}")
+fecha_sup = st.date_input("Fecha de Supervisión", value=parse_fecha(datos_existentes.get('fecha_sup')), key=f"fs_{p_num}")
 
-    btn_guardar = st.form_submit_button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True)
+nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''), key=f"n_{p_num}", help="Solo letras permitidas")
+apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''), key=f"a_{p_num}", help="Solo letras permitidas")
 
-    if btn_guardar:
-        # Filtrado de respaldo en servidor
-        nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre).strip().upper()
-        apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', apellido).strip().upper()
-        centro_clean = centro.strip().upper()
-        rut_clean = re.sub(r'[^0-9kK\-]', '', rut).strip().upper()
+rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''), key=f"r_{p_num}", help="Solo números, guion y K. Ejemplo: 12345678-K")
+fecha_atencion = st.date_input("Fecha de Atención supervisada", value=parse_fecha(datos_existentes.get('fecha_atencion')), key=f"fa_{p_num}")
 
-        st.session_state.pautas_data[p_num] = {
-            "centro": centro_clean,
-            "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
-            "nombre": nombre_clean,
-            "apellido": apellido_clean,
-            "rut": rut_clean,
-            "fecha_atencion": fecha_atencion.strftime("%d-%m-%Y"),
-            "servicio": servicio,
-            "exodoncia": exodoncia,
-            "cumple": cumple
-        }
-        st.session_state.ultimo_centro = centro_clean
-        
-        if p_num < 18:
-            st.session_state.pauta_actual = p_num + 1
-        
-        st.rerun()
+servicio = st.selectbox("Servicio Clínico", servicios, index=idx_serv, key=f"s_{p_num}")
+exodoncia = st.radio("¿Procedimiento corresponde a Exodoncia?", ["SI", "NO"], index=idx_exo, key=f"e_{p_num}")
 
 st.markdown("---")
+st.markdown("**CRITERIO A EVALUAR**")
+cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica?", ["SI", "NO"], index=idx_cumple, key=f"cu_{p_num}")
 
+btn_guardar = st.button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True, key=f"btn_{p_num}")
+
+if btn_guardar:
+    # Sanitización estricta al presionar Guardar
+    nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre).strip().upper()
+    apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', apellido).strip().upper()
+    centro_clean = centro.strip().upper()
+    rut_clean = re.sub(r'[^0-9kK\-]', '', rut).strip().upper()
+
+    st.session_state.pautas_data[p_num] = {
+        "centro": centro_clean,
+        "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
+        "nombre": nombre_clean,
+        "apellido": apellido_clean,
+        "rut": rut_clean,
+        "fecha_atencion": fecha_atencion.strftime("%d-%m-%Y"),
+        "servicio": servicio,
+        "exodoncia": exodoncia,
+        "cumple": cumple
+    }
+    st.session_state.ultimo_centro = centro_clean
+    
+    if p_num < 18:
+        st.session_state.pauta_actual = p_num + 1
+    
+    st.rerun()
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# --- RESUMEN Y DESCARGA ---
 if completadas == 18:
     st.success("🎉 ¡Has completado las 18 pautas exitosamente!")
 else:
