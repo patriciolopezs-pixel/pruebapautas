@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
@@ -13,31 +12,6 @@ if 'pautas' not in st.session_state:
     st.session_state.pautas = []
 if 'ultimo_centro' not in st.session_state:
     st.session_state.ultimo_centro = ""
-if 'subir_pantalla' not in st.session_state:
-    st.session_state.subir_pantalla = False
-
-# Ejecutar el scroll hacia arriba solo cuando se guarda una pauta
-if st.session_state.subir_pantalla:
-    components.html(
-        """
-        <script>
-            try {
-                var mainContainer = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
-                if (mainContainer) {
-                    mainContainer.scrollTop = 0;
-                } else {
-                    window.parent.scrollTo(0, 0);
-                }
-            } catch (e) {
-                console.log(e);
-            }
-        </script>
-        """,
-        height=0,
-        width=0
-    )
-    st.session_state.subir_pantalla = False
-
 
 def generar_excel_consolidado(pautas):
     wb = Workbook()
@@ -153,21 +127,19 @@ def generar_excel_consolidado(pautas):
     return output
 
 
-# --- INTERFAZ WEB RESPONSIVA ---
+# --- INTERFAZ WEB RESPONSIVA CON FEEDBACK INMEDIATO ---
 st.title("🦷 Pausa de Seguridad Dental")
-st.write("Complete el formulario para las 18 pautas de supervisión.")
 
 pautas_ingresadas = len(st.session_state.pautas)
 
+# Indicador de progreso visible arriba
 st.progress(pautas_ingresadas / 18)
-st.caption(f"Pautas ingresadas: **{pautas_ingresadas} de 18**")
+st.caption(f"Pautas guardadas: **{pautas_ingresadas} de 18**")
 
 if pautas_ingresadas < 18:
     st.subheader(f"Pauta N° {pautas_ingresadas + 1}")
     
-    # Se asigna una clave dinámica para reiniciar los campos en cada pauta
     with st.form(f"form_pauta_{pautas_ingresadas}", clear_on_submit=True):
-        
         centro = st.text_input("Centro", value=st.session_state.ultimo_centro)
         fecha_sup = st.date_input("Fecha de Supervisión")
         nombre = st.text_input("Nombre de la persona supervisada")
@@ -185,10 +157,10 @@ if pautas_ingresadas < 18:
         st.markdown("**CRITERIO A EVALUAR**")
         cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica?", ["SI", "NO"])
 
-        btn_guardar = st.form_submit_button("Guardar Pauta", type="primary", use_container_width=True)
+        btn_guardar = st.form_submit_button(f"Guardar Pauta N° {pautas_ingresadas + 1}", type="primary", use_container_width=True)
 
         if btn_guardar:
-            # 1. Guardar la pauta
+            # 1. Guardar pauta y centro
             st.session_state.pautas.append({
                 "centro": centro,
                 "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
@@ -200,15 +172,15 @@ if pautas_ingresadas < 18:
                 "exodoncia": exodoncia,
                 "cumple": cumple
             })
-            # 2. Guardar el centro ingresado
             st.session_state.ultimo_centro = centro
             
-            # 3. Indicar que debe volver al inicio de la página en la recarga
-            st.session_state.subir_pantalla = True
+            # 2. Notificación flotante en la pantalla del celular
+            st.toast(f"✅ ¡Pauta N° {pautas_ingresadas + 1} guardada con éxito! Cargando Pauta N° {pautas_ingresadas + 2}...", icon="📝")
             
             st.rerun()
 else:
     st.success("✅ ¡Se han completado las 18 pautas!")
+    st.toast("🎉 ¡Todas las pautas han sido completadas!", icon="✅")
     
     excel_file = generar_excel_consolidado(st.session_state.pautas)
     
@@ -223,5 +195,4 @@ else:
     if st.button("Reiniciar y crear nuevo consolidado", use_container_width=True):
         st.session_state.pautas = []
         st.session_state.ultimo_centro = ""
-        st.session_state.subir_pantalla = True
         st.rerun()
