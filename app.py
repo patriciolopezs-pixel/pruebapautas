@@ -3,22 +3,38 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 import io
+import datetime
 
 # Configuración de la página web
 st.set_page_config(page_title="Pautas de Supervisión Dental", layout="centered")
 
-# --- ESTADO DE LA SESIÓN ---
-if 'pautas' not in st.session_state:
-    st.session_state.pautas = []
+# --- 1. ESTADO DE LA SESIÓN (MATRIZ DE 18 PAUTAS) ---
+if 'pautas_data' not in st.session_state:
+    st.session_state.pautas_data = {i: None for i in range(1, 19)}
+
+if 'pauta_actual' not in st.session_state:
+    st.session_state.pauta_actual = 1
+
 if 'ultimo_centro' not in st.session_state:
     st.session_state.ultimo_centro = ""
 
-def generar_excel_consolidado(pautas):
+
+# Helper para convertir texto de fecha a objeto date
+def parse_fecha(fecha_str):
+    if fecha_str:
+        try:
+            return datetime.datetime.strptime(fecha_str, "%d-%m-%Y").date()
+        except Exception:
+            pass
+    return datetime.date.today()
+
+
+# --- 2. GENERADOR EXCEL CONSOLIDADO ---
+def generar_excel_consolidado(pautas_dict):
     wb = Workbook()
     ws = wb.active
     ws.title = "Consolidado Pautas"
 
-    # Estilos
     thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
                          top=Side(style='thin'), bottom=Side(style='thin'))
     center_aligned_text = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -26,7 +42,7 @@ def generar_excel_consolidado(pautas):
     bold_font = Font(bold=True)
     blue_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
 
-    # 1. Encabezados
+    # Encabezados
     ws.merge_cells('A1:AK1')
     ws['A1'] = "PAUTA DE SUPERVISIÓN CUMPLIMIENTO DE PAUSA DE SEGURIDAD DENTAL EN BOX DENTAL, PABELLÓN DE CIRUGÍA MENOR DENTAL E IMAGENOLOGÍA DENTAL (GCL 2.1 AO)"
     ws['A1'].font = bold_font
@@ -38,7 +54,7 @@ def generar_excel_consolidado(pautas):
     ws['A2'].font = bold_font
     ws['B2'].alignment = center_aligned_text
 
-    # 2. Etiquetas de filas
+    # Etiquetas de filas
     etiquetas = [
         "Centro", "Fecha de Supervisión", "Nombre de la persona supervisada", 
         "Apellido(s) de la persona supervisada", "RUT del paciente", 
@@ -54,7 +70,7 @@ def generar_excel_consolidado(pautas):
 
     ws.column_dimensions['A'].width = 50
 
-    # 3. Criterios
+    # Criterios
     ws.cell(row=11, column=1, value="N° DE PAUTA").font = bold_font
     ws.cell(row=12, column=1, value="CRITERIOS A EVALUAR").font = bold_font
     ws.cell(row=13, column=1, value="Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica.")
@@ -65,15 +81,15 @@ def generar_excel_consolidado(pautas):
     ws.cell(row=14, column=1).fill = blue_fill
     ws.cell(row=15, column=1).fill = blue_fill
 
-    # 4. Llenar pautas
     total_cumple = 0
     total_no_cumple = 0
 
     for idx in range(18):
+        num_pauta = idx + 1
         col_start = 2 + (idx * 2)
         col_end = col_start + 1
 
-        pauta_data = pautas[idx] if idx < len(pautas) else {}
+        pauta_data = pautas_dict.get(num_pauta) or {}
 
         campos = ["centro", "fecha_sup", "nombre", "apellido", "rut", "fecha_atencion", "servicio", "exodoncia"]
         for row_idx, campo in enumerate(campos, start=3):
@@ -82,7 +98,7 @@ def generar_excel_consolidado(pautas):
             ws.cell(row=row_idx, column=col_start).alignment = center_aligned_text
 
         ws.merge_cells(start_row=11, start_column=col_start, end_row=11, end_column=col_end)
-        ws.cell(row=11, column=col_start, value=idx + 1).alignment = center_aligned_text
+        ws.cell(row=11, column=col_start, value=num_pauta).alignment = center_aligned_text
 
         ws.cell(row=12, column=col_start, value="SI").alignment = center_aligned_text
         ws.cell(row=12, column=col_end, value="NO").alignment = center_aligned_text
@@ -95,7 +111,7 @@ def generar_excel_consolidado(pautas):
             ws.cell(row=14, column=col_end, value="X").alignment = center_aligned_text
             total_no_cumple += 1
 
-    # 5. Totales
+    # Totales
     ws.merge_cells('B15:C15')
     ws['B15'] = total_cumple
     ws['B15'].alignment = center_aligned_text
@@ -112,7 +128,8 @@ def generar_excel_consolidado(pautas):
     ws['H15'] = "% Cumplimiento"
     ws['H15'].font = bold_font
 
-    porcentaje = f"{(total_cumple/18)*100:.1f}%" if len(pautas) == 18 else "-"
+    completadas = sum(1 for v in pautas_dict.values() if v is not None)
+    porcentaje = f"{(total_cumple/18)*100:.1f}%" if completadas == 18 else "-"
     ws.merge_cells('K15:L15')
     ws['K15'] = porcentaje
     ws['K15'].alignment = center_aligned_text
@@ -127,40 +144,67 @@ def generar_excel_consolidado(pautas):
     return output
 
 
-# --- INTERFAZ WEB ---
+# --- 3. INTERFAZ DE USUARIO ---
 st.title("🦷 Pausa de Seguridad Dental")
 
-pautas_ingresadas = len(st.session_state.pautas)
+# Conteo de pautas guardadas
+completadas = sum(1 for v in st.session_state.pautas_data.values() if v is not None)
 
-# Barra de progreso
-st.progress(pautas_ingresadas / 18)
-st.caption(f"Pautas guardadas: **{pautas_ingresadas} de 18**")
+st.progress(completadas / 18)
+st.caption(f"Progreso global: **{completadas} de 18 pautas guardadas**")
 
-if pautas_ingresadas < 18:
-    idx = pautas_ingresadas
-    st.subheader(f"Ingresando Pauta N° {idx + 1}")
+# Selector de pauta activa
+def formato_opcion(num):
+    estado = "✅ Guardada" if st.session_state.pautas_data[num] is not None else "⏳ Pendiente"
+    return f"Pauta N° {num} ({estado})"
+
+pauta_seleccionada = st.selectbox(
+    "Selecciona la pauta a ingresar o revisar:",
+    options=list(range(1, 19)),
+    index=st.session_state.pauta_actual - 1,
+    format_func=formato_opcion
+)
+
+# Actualizar pauta activa según selector
+st.session_state.pauta_actual = pauta_seleccionada
+p_num = st.session_state.pauta_actual
+
+# Cargar datos guardados previamente de la pauta elegida (si existen)
+datos_existentes = st.session_state.pautas_data[p_num] or {}
+
+# Opciones de listas
+servicios = [
+    "Sala de Procedimiento Dental (BD)", 
+    "Pabellón de Cirugía menor Dental (PD)", 
+    "Imagenología Dental (RX)"
+]
+idx_serv = servicios.index(datos_existentes.get('servicio')) if datos_existentes.get('servicio') in servicios else 0
+
+idx_exo = 0 if datos_existentes.get('exodoncia') != "NO" else 1
+idx_cumple = 0 if datos_existentes.get('cumple') != "NO" else 1
+
+# --- FORMULARIO DE LA PAUTA SELECCIONADA ---
+with st.form(key=f"form_pauta_numero_{p_num}"):
+    st.subheader(f"Formulario Pauta N° {p_num}")
     
-    # Entradas de formulario con KEY DINÁMICA basada en el índice de pauta
-    centro = st.text_input("Centro", value=st.session_state.ultimo_centro, key=f"centro_{idx}")
-    fecha_sup = st.date_input("Fecha de Supervisión", key=f"fecha_sup_{idx}")
-    nombre = st.text_input("Nombre de la persona supervisada", key=f"nombre_{idx}")
-    apellido = st.text_input("Apellido(s) de la persona supervisada", key=f"apellido_{idx}")
-    rut = st.text_input("RUT del paciente", key=f"rut_{idx}")
-    fecha_atencion = st.date_input("Fecha de Atención supervisada", key=f"fecha_atencion_{idx}")
-    servicio = st.selectbox("Servicio Clínico", [
-        "Sala de Procedimiento Dental (BD)", 
-        "Pabellón de Cirugía menor Dental (PD)", 
-        "Imagenología Dental (RX)"
-    ], key=f"servicio_{idx}")
-    exodoncia = st.radio("¿Procedimiento corresponde a Exodoncia?", ["SI", "NO"], key=f"exodoncia_{idx}")
+    centro = st.text_input("Centro", value=datos_existentes.get('centro', st.session_state.ultimo_centro))
+    fecha_sup = st.date_input("Fecha de Supervisión", value=parse_fecha(datos_existentes.get('fecha_sup')))
+    nombre = st.text_input("Nombre de la persona supervisada", value=datos_existentes.get('nombre', ''))
+    apellido = st.text_input("Apellido(s) de la persona supervisada", value=datos_existentes.get('apellido', ''))
+    rut = st.text_input("RUT del paciente", value=datos_existentes.get('rut', ''))
+    fecha_atencion = st.date_input("Fecha de Atención supervisada", value=parse_fecha(datos_existentes.get('fecha_atencion')))
+    servicio = st.selectbox("Servicio Clínico", servicios, index=idx_serv)
+    exodoncia = st.radio("¿Procedimiento corresponde a Exodoncia?", ["SI", "NO"], index=idx_exo)
 
     st.markdown("---")
     st.markdown("**CRITERIO A EVALUAR**")
-    cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica?", ["SI", "NO"], key=f"cumple_{idx}")
+    cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica?", ["SI", "NO"], index=idx_cumple)
 
-    # Botón de guardado
-    if st.button(f"💾 Guardar Pauta N° {idx + 1}", type="primary", use_container_width=True):
-        nueva_pauta = {
+    btn_guardar = st.form_submit_button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True)
+
+    if btn_guardar:
+        # Guardar datos en el mapa de la pauta actual
+        st.session_state.pautas_data[p_num] = {
             "centro": centro,
             "fecha_sup": fecha_sup.strftime("%d-%m-%Y"),
             "nombre": nombre,
@@ -171,34 +215,40 @@ if pautas_ingresadas < 18:
             "exodoncia": exodoncia,
             "cumple": cumple
         }
-        st.session_state.pautas.append(nueva_pauta)
         st.session_state.ultimo_centro = centro
+        
+        # Si no es la última pauta, avanzar automáticamente a la siguiente
+        if p_num < 18:
+            st.session_state.pauta_actual = p_num + 1
+        
         st.rerun()
 
-    if pautas_ingresadas > 0:
-        if st.button("⏪ Borrar última pauta ingresada", use_container_width=True):
-            st.session_state.pautas.pop()
-            st.rerun()
+# --- SECCIÓN DE DESCARGA Y RESUMEN ---
+st.markdown("---")
 
+if completadas == 18:
+    st.success("🎉 ¡Has completado las 18 pautas exitosamente!")
 else:
-    st.success("🎉 ¡Has completado las 18 pautas de supervisión!")
-    
-    excel_file = generar_excel_consolidado(st.session_state.pautas)
-    
-    st.download_button(
-        label="📥 Descargar Excel Consolidado (18 Pautas)",
-        data=excel_file,
-        file_name="Consolidado_Pausa_Seguridad_Dental.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
-    )
+    st.info(f"Faltan **{18 - completadas} pautas** por completar para finalizar el proceso.")
 
-    if st.button("🔄 Reiniciar y crear nuevo consolidado", use_container_width=True):
-        st.session_state.pautas = []
-        st.session_state.ultimo_centro = ""
-        st.rerun()
+excel_file = generar_excel_consolidado(st.session_state.pautas_data)
 
-# Vista previa de datos cargados
-if pautas_ingresadas > 0:
-    with st.expander(f"📋 Ver lista de pautas ingresadas ({pautas_ingresadas}/18)"):
-        st.dataframe(pd.DataFrame(st.session_state.pautas), use_container_width=True)
+st.download_button(
+    label="📥 Descargar Excel Consolidado",
+    data=excel_file,
+    file_name="Consolidado_Pausa_Seguridad_Dental.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    use_container_width=True
+)
+
+if st.button("🔄 Reiniciar todo y borrar pautas", use_container_width=True):
+    st.session_state.pautas_data = {i: None for i in range(1, 19)}
+    st.session_state.ultimo_centro = ""
+    st.session_state.pauta_actual = 1
+    st.rerun()
+
+# Tabla con resumen de lo que se ha llenado
+pautas_list = [v for v in st.session_state.pautas_data.values() if v is not None]
+if len(pautas_list) > 0:
+    with st.expander(f"📋 Ver resumen de pautas guardadas ({len(pautas_list)}/18)"):
+        st.dataframe(pd.DataFrame(pautas_list), use_container_width=True)
