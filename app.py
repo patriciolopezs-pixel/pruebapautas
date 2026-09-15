@@ -12,12 +12,10 @@ st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="ce
 # --- ESTILOS CSS VISUALES (REDSALUD MODO CLARO) ---
 st.markdown("""
 <style>
-    /* Fondo global de la aplicación */
     .stApp {
         background-color: #F4F7F6 !important;
     }
     
-    /* Títulos e instrucciones */
     h1, h2, h3, h4 {
         color: #00205B !important;
         font-family: 'Segoe UI', Tahoma, sans-serif !important;
@@ -28,7 +26,6 @@ st.markdown("""
         color: #00205B !important;
     }
 
-    /* Campos de texto y selección */
     input, select, textarea, div[data-baseweb="select"] {
         background-color: #FFFFFF !important;
         color: #00205B !important;
@@ -38,7 +35,6 @@ st.markdown("""
         text-transform: uppercase !important;
     }
 
-    /* Botón Guardar (Turquesa RedSalud) */
     button[kind="primary"] {
         background-color: #00828A !important;
         border: none !important;
@@ -50,7 +46,6 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* Botones Secundarios y Descarga */
     button[kind="secondary"], .stDownloadButton button {
         background-color: #00205B !important;
         border: none !important;
@@ -61,7 +56,6 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* Cuadro contenedor personalizado */
     .pauta-container {
         background-color: #FFFFFF;
         border: 1px solid #E2E8F0;
@@ -95,17 +89,17 @@ def parse_fecha(fecha_str):
     return datetime.date.today()
 
 
-# --- 2. GENERADOR EXCEL CONSOLIDADO ---
+# --- 2. GENERADOR EXCEL CONSOLIDADO CON FORMATO EXACTO ---
 def generar_excel_consolidado(pautas_dict):
     wb = Workbook()
     ws = wb.active
     ws.title = "Consolidado Pautas"
 
     thin_border = Border(
-        left=Side(style='thin', color='B0BEC5'), 
-        right=Side(style='thin', color='B0BEC5'), 
-        top=Side(style='thin', color='B0BEC5'), 
-        bottom=Side(style='thin', color='B0BEC5')
+        left=Side(style='thin', color='000000'), 
+        right=Side(style='thin', color='000000'), 
+        top=Side(style='thin', color='000000'), 
+        bottom=Side(style='thin', color='000000')
     )
     center_aligned_text = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left_aligned_text = Alignment(horizontal="left", vertical="center", wrap_text=True)
@@ -117,6 +111,7 @@ def generar_excel_consolidado(pautas_dict):
     teal_sub_fill = PatternFill(start_color="00828A", end_color="00828A", fill_type="solid")
     soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
 
+    # Encabezado principal (Fila 1 y 2)
     ws.merge_cells('A1:AK1')
     ws['A1'] = "PAUTA DE SUPERVISIÓN CUMPLIMIENTO DE PAUSA DE SEGURIDAD DENTAL EN BOX DENTAL, PABELLÓN DE CIRUGÍA MENOR DENTAL E IMAGENOLOGÍA DENTAL (GCL 2.1 AO)"
     ws['A1'].font = bold_font_white
@@ -129,9 +124,13 @@ def generar_excel_consolidado(pautas_dict):
     ws['A2'].font = bold_font_navy
     ws['B2'].alignment = center_aligned_text
 
+    # Etiquetas de filas (Filas 3 a 10)
     etiquetas = [
-        "Centro", "Fecha de Supervisión", "Nombre de la persona supervisada", 
-        "Apellido(s) de la persona supervisada", "RUT del paciente", 
+        "Centro", 
+        "Fecha de Supervisión", 
+        "Nombre de la persona supervisada", 
+        "Apellido(s) de la persona supervisada", 
+        "RUT del paciente", 
         "Fecha de Atención supervisada", 
         "Servicio Clínico donde se realizó el procedimiento, ya sea Sala de Procedimiento Dental (BD), Pabellón de Cirugía menor Dental (PD), e Imagenología Dental (RX)",
         "Procedimiento corresponde a Exodoncia (SI, NO)"
@@ -144,23 +143,30 @@ def generar_excel_consolidado(pautas_dict):
 
     ws.column_dimensions['A'].width = 50
 
+    # Fila 11: N° DE PAUTA
     ws.cell(row=11, column=1, value="N° DE PAUTA").font = bold_font_white
     ws.cell(row=11, column=1).fill = teal_sub_fill
     
+    # Fila 12: CRITERIOS A EVALUAR
     ws.cell(row=12, column=1, value="CRITERIOS A EVALUAR").font = bold_font_white
     ws.cell(row=12, column=1).fill = teal_sub_fill
     
+    # Fila 13: Criterio
     ws.cell(row=13, column=1, value="Se constata Pausa de Seguridad Dental realizada y registrada en Ficha Clínica.")
+    ws.cell(row=13, column=1).alignment = left_aligned_text
     
+    # Fila 14: Cumple (SI/NO)
     ws.cell(row=14, column=1, value="Cumple (SI/NO)").font = bold_font_navy
     ws.cell(row=14, column=1).fill = soft_teal_fill
     
+    # Fila 15: Totales
     ws.cell(row=15, column=1, value="Total Cumple").font = bold_font_navy
     ws.cell(row=15, column=1).fill = soft_teal_fill
 
     total_cumple = 0
     total_no_cumple = 0
 
+    # Llenado de las 18 pautas (Columnas B a AK)
     for idx in range(18):
         num_pauta = idx + 1
         col_start = 2 + (idx * 2)
@@ -168,50 +174,80 @@ def generar_excel_consolidado(pautas_dict):
 
         pauta_data = pautas_dict.get(num_pauta) or {}
 
+        # Datos generales (Filas 3 a 10)
         campos = ["centro", "fecha_sup", "nombre", "apellido", "rut", "fecha_atencion", "servicio", "exodoncia"]
         for row_idx, campo in enumerate(campos, start=3):
             ws.merge_cells(start_row=row_idx, start_column=col_start, end_row=row_idx, end_column=col_end)
             ws.cell(row=row_idx, column=col_start, value=pauta_data.get(campo, ""))
             ws.cell(row=row_idx, column=col_start).alignment = center_aligned_text
 
+        # Fila 11: N° de Pauta
         ws.merge_cells(start_row=11, start_column=col_start, end_row=11, end_column=col_end)
         ws.cell(row=11, column=col_start, value=num_pauta).alignment = center_aligned_text
+        ws.cell(row=11, column=col_start).font = bold_font_navy
         ws.cell(row=11, column=col_start).fill = soft_teal_fill
 
+        # Fila 12: Headers SI / NO
         ws.cell(row=12, column=col_start, value="SI").alignment = center_aligned_text
+        ws.cell(row=12, column=col_start).font = bold_font_navy
         ws.cell(row=12, column=col_end, value="NO").alignment = center_aligned_text
+        ws.cell(row=12, column=col_end).font = bold_font_navy
 
+        # Fila 13 & 14: Marcas y Registro Cumple
         cumple = pauta_data.get("cumple", "")
         if cumple == "SI":
-            ws.cell(row=14, column=col_start, value="X").alignment = center_aligned_text
+            ws.cell(row=13, column=col_start, value="√").alignment = center_aligned_text
+            ws.merge_cells(start_row=14, start_column=col_start, end_row=14, end_column=col_end)
+            ws.cell(row=14, column=col_start, value="SI").alignment = center_aligned_text
             total_cumple += 1
         elif cumple == "NO":
-            ws.cell(row=14, column=col_end, value="X").alignment = center_aligned_text
+            ws.cell(row=13, column=col_end, value="X").alignment = center_aligned_text
+            ws.merge_cells(start_row=14, start_column=col_start, end_row=14, end_column=col_end)
+            ws.cell(row=14, column=col_start, value="NO").alignment = center_aligned_text
             total_no_cumple += 1
+        else:
+            ws.merge_cells(start_row=14, start_column=col_start, end_row=14, end_column=col_end)
 
-    ws.merge_cells('B15:C15')
+    # Fila 15: Estructura exacta de Totales e Indicadores
+    ws.merge_cells('B15:F15')
     ws['B15'] = total_cumple
     ws['B15'].alignment = center_aligned_text
-    
-    ws.merge_cells('D15:E15')
-    ws['D15'] = "Total No Cumple"
-    ws['D15'].font = bold_font_navy
-    
-    ws.merge_cells('F15:G15')
-    ws['F15'] = total_no_cumple
-    ws['F15'].alignment = center_aligned_text
 
-    ws.merge_cells('H15:J15')
-    ws['H15'] = "% Cumplimiento"
-    ws['H15'].font = bold_font_navy
+    ws.merge_cells('G15:J15')
+    ws['G15'] = "Total No Cumple"
+    ws['G15'].font = bold_font_navy
+    ws['G15'].alignment = center_aligned_text
 
-    completadas = sum(1 for v in pautas_dict.values() if v is not None)
-    porcentaje = f"{(total_cumple/18)*100:.1f}%" if completadas == 18 else "-"
-    ws.merge_cells('K15:L15')
-    ws['K15'] = porcentaje
+    ws.merge_cells('K15:N15')
+    ws['K15'] = total_no_cumple
     ws['K15'].alignment = center_aligned_text
 
-    for row in ws.iter_rows(min_row=1, max_row=16, min_col=1, max_col=37):
+    ws.merge_cells('O15:R15')
+    ws['O15'] = "% Cumplimiento"
+    ws['O15'].font = bold_font_navy
+    ws['O15'].alignment = center_aligned_text
+
+    completadas = sum(1 for v in pautas_dict.values() if v is not None)
+    porcentaje = f"{(total_cumple/18)*100:.1f}%" if completadas == 18 else f"{(total_cumple/completadas)*100:.1f}%" if completadas > 0 else "-"
+    ws.merge_cells('S15:V15')
+    ws['S15'] = porcentaje
+    ws['S15'].alignment = center_aligned_text
+
+    # Filas 16 a 20: Observaciones y Firma/Timbre
+    ws.merge_cells('A16:R20')
+    ws['A16'] = "Observaciones:"
+    ws['A16'].font = bold_font_navy
+    ws['A16'].alignment = Alignment(horizontal="left", vertical="top")
+
+    ws.merge_cells('S16:V18')  # Espacio en blanco para firma o timbre
+    
+    ws.merge_cells('S19:V20')
+    ws['S19'] = "Nombre o Timbre\ndel responsable de\naplicar la pauta"
+    ws['S19'].font = bold_font_navy
+    ws['S19'].alignment = center_aligned_text
+
+    # Aplicar bordes en todo el rango
+    for row in ws.iter_rows(min_row=1, max_row=20, min_col=1, max_col=37):
         for cell in row:
             cell.border = thin_border
 
@@ -254,7 +290,7 @@ idx_serv = servicios.index(datos_existentes.get('servicio')) if datos_existentes
 idx_exo = 0 if datos_existentes.get('exodoncia') != "NO" else 1
 idx_cumple = 0 if datos_existentes.get('cumple') != "NO" else 1
 
-# --- FORMULARIO LIBRE (SIN st.form PARA EVITAR SUBMIT CON ENTER) ---
+# Formulario libre
 st.markdown('<div class="pauta-container">', unsafe_allow_html=True)
 st.subheader(f"Formulario Pauta N° {p_num}")
 
@@ -277,7 +313,6 @@ cumple = st.radio("¿Se constata Pausa de Seguridad Dental realizada y registrad
 btn_guardar = st.button(f"💾 Guardar Pauta N° {p_num}", type="primary", use_container_width=True, key=f"btn_{p_num}")
 
 if btn_guardar:
-    # Sanitización estricta al presionar Guardar
     nombre_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', nombre).strip().upper()
     apellido_clean = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', '', apellido).strip().upper()
     centro_clean = centro.strip().upper()
@@ -303,7 +338,7 @@ if btn_guardar:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- RESUMEN Y DESCARGA ---
+# Resumen y descarga
 if completadas == 18:
     st.success("🎉 ¡Has completado las 18 pautas exitosamente!")
 else:
