@@ -5,25 +5,31 @@ from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 import io
 import datetime
 
-# Configuración inicial
+# Configuración de la página web
 st.set_page_config(page_title="Pausa de Seguridad Dental - RedSalud", layout="centered")
 
-# --- CSS DE REFUERZO VISUAL ---
+# --- ESTILOS CSS LIMPIOS (SIN CORRUPCIÓN DE ÍCONOS) ---
 st.markdown("""
 <style>
-    /* Estructura general */
+    /* Fondo global */
     .stApp {
         background-color: #F4F7F6 !important;
     }
     
-    /* Títulos y textos */
-    h1, h2, h3, h4, label, p, span, div {
+    /* Encabezados */
+    h1, h2, h3, h4 {
         color: #00205B !important;
         font-family: 'Segoe UI', Tahoma, sans-serif !important;
+        font-weight: 700 !important;
+    }
+    
+    /* Textos y Etiquetas de preguntas */
+    .stMarkdown, label, p {
+        color: #00205B !important;
     }
 
-    /* Campos de entrada y Fechas */
-    .stDateInput input, .stTextInput input, div[data-baseweb="select"] {
+    /* Campos de entrada, selects y fechas */
+    input, select, textarea, div[data-baseweb="select"] {
         background-color: #FFFFFF !important;
         color: #00205B !important;
         -webkit-text-fill-color: #00205B !important;
@@ -31,7 +37,7 @@ st.markdown("""
         border-radius: 8px !important;
     }
 
-    /* Caja del formulario */
+    /* Contenedor del Formulario (Tarjeta Blanca) */
     [data-testid="stForm"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0 !important;
@@ -47,26 +53,33 @@ st.markdown("""
         border: none !important;
         border-radius: 8px !important;
     }
-    button[kind="primary"] * {
+    button[kind="primary"] p {
         color: #FFFFFF !important;
         font-weight: bold !important;
     }
 
-    /* Botones Secundarios y Descarga (Azul Marino RedSalud) */
+    /* Botones Secundarios y Descargar (Azul Marino RedSalud) */
     button[kind="secondary"], .stDownloadButton button {
         background-color: #00205B !important;
         border: none !important;
         border-radius: 8px !important;
     }
-    button[kind="secondary"] *, .stDownloadButton button * {
+    button[kind="secondary"] p, .stDownloadButton button p {
         color: #FFFFFF !important;
         font-weight: bold !important;
+    }
+
+    /* Cuadro de Resumen Desplegable */
+    div[data-testid="stExpander"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 8px !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
-# --- ESTADO DE LA SESIÓN ---
+# --- 1. ESTADO DE LA SESIÓN ---
 if 'pautas_data' not in st.session_state:
     st.session_state.pautas_data = {i: None for i in range(1, 19)}
 
@@ -86,7 +99,7 @@ def parse_fecha(fecha_str):
     return datetime.date.today()
 
 
-# --- GENERADOR EXCEL ---
+# --- 2. GENERADOR EXCEL CONSOLIDADO ---
 def generar_excel_consolidado(pautas_dict):
     wb = Workbook()
     ws = wb.active
@@ -212,7 +225,7 @@ def generar_excel_consolidado(pautas_dict):
     return output
 
 
-# --- INTERFAZ ---
+# --- 3. INTERFAZ DE USUARIO ---
 st.title("RedSalud | Pausa de Seguridad Dental")
 
 completadas = sum(1 for v in st.session_state.pautas_data.values() if v is not None)
@@ -245,6 +258,7 @@ idx_serv = servicios.index(datos_existentes.get('servicio')) if datos_existentes
 idx_exo = 0 if datos_existentes.get('exodoncia') != "NO" else 1
 idx_cumple = 0 if datos_existentes.get('cumple') != "NO" else 1
 
+# --- FORMULARIO DE PAUTA ---
 with st.form(key=f"form_pauta_numero_{p_num}"):
     st.subheader(f"Formulario Pauta N° {p_num}")
     
@@ -292,7 +306,7 @@ else:
 excel_file = generar_excel_consolidado(st.session_state.pautas_data)
 
 st.download_button(
-    label="📥 Descargar Excel Consolidado RedSalud",
+    label="📥 Descargar Excel Consolidado",
     data=excel_file,
     file_name="Consolidado_Pausa_Seguridad_Dental_RedSalud.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
