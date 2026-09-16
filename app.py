@@ -197,114 +197,89 @@ def procesar_df_masivo(df, fecha_sup_default):
     return count
 
 
-# --- LÓGICA CARGA MASIVA REG 1.2 AO (ADAPTADA PARA TEXTO CONCATENADO DE LA GEMA) ---
+# --- LÓGICA CARGA MASIVA REG 1.2 AO (ANALIZADOR DE TEXTO DE LA GEMA) ---
 def procesar_texto_reg12(texto):
     if not texto or not texto.strip():
         return 0
 
     raw_text = texto.strip()
 
-    # Expresión regular que detecta registros en texto concatenado
-    record_pattern = re.compile(
-        r'(\d{7,8}-[\dkK])'                        # 1: RUT Paciente
-        r'(.*?)'                                   # 2: Nombre Paciente
-        r'(\d{1,2}/\d{1,2}/\d{2,4})'               # 3: Fecha Diagnóstico
-        r'(.*?)'                                   # 4: Bloque Nombre/RUT Profesional
-        r'((?:SI|NO){10})',                        # 5: Secuencia de 10 respuestas SI/NO
-        re.IGNORECASE | re.DOTALL
-    )
+    # Buscar todas las fechas de diagnóstico (DD/MM/YYYY o DD-MM-YYYY)
+    date_matches = list(re.finditer(r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', raw_text))
 
-    matches = list(record_pattern.finditer(raw_text))
+    if not date_matches:
+        return 0
+
     count = 0
 
-    if len(matches) > 0:
-        for m in matches:
-            if count >= 18:
-                break
-            num_pauta = count + 1
-
-            rut_pac = m.group(1).strip().upper()
-            nom_pac = clean_text_spaces(m.group(2))
-            fecha_diag_raw = m.group(3).strip()
-
-            try:
-                fecha_diag = pd.to_datetime(fecha_diag_raw, dayfirst=True).strftime("%d-%m-%Y")
-            except Exception:
-                fecha_diag = fecha_diag_raw
-
-            prof_block = m.group(4).strip()
-            sino_block = m.group(5).strip().upper()
-
-            nom_prof = ""
-            rut_prof = ""
-
-            if "NO REGISTRADO" in prof_block.upper():
-                nom_prof = "NO REGISTRADO"
-                rut_prof = "NO REGISTRADO"
-            else:
-                rut_prof_match = re.search(r'(\d{7,8}-[\dkK])', prof_block)
-                if rut_prof_match:
-                    rut_prof = rut_prof_match.group(1).upper()
-                    nom_prof = clean_text_spaces(prof_block[:rut_prof_match.start()])
-                else:
-                    nom_prof = clean_text_spaces(prof_block)
-                    rut_prof = ""
-
-            sino_list = re.findall(r'(SI|NO)', sino_block)
-
-            def get_sino_item(idx, default="SI"):
-                if idx < len(sino_list):
-                    return sino_list[idx]
-                return default
-
-            st.session_state.reg12_data[num_pauta] = {
-                "rut_pac": rut_pac,
-                "nom_pac": nom_pac,
-                "fecha_diag": fecha_diag,
-                "nom_prof": nom_prof if nom_prof else "NO REGISTRADO",
-                "rut_prof": rut_prof if rut_prof else "NO REGISTRADO",
-                "motivo": get_sino_item(0),
-                "patologias": get_sino_item(1),
-                "medicamentos": get_sino_item(2),
-                "alergias": get_sino_item(3),
-                "extraoral": get_sino_item(4),
-                "intraoral": get_sino_item(5),
-                "diagnostico": get_sino_item(6),
-                "plan": get_sino_item(7),
-                "pronostico": get_sino_item(8),
-                "cumple": get_sino_item(9)
-            }
-            count += 1
-        return count
-
-    # Fallback para tablas con tabulaciones desde Excel
-    lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
-    start_idx = 1 if ('RUT' in lines[0].upper() or 'PACIENTE' in lines[0].upper()) else 0
-
-    for line in lines[start_idx:]:
+    for idx, d_match in enumerate(date_matches):
         if count >= 18:
             break
+
+        fecha_raw = d_match.group(1)
+        f_start = d_match.start()
+        f_end = d_match.end()
+
+        try:
+            fecha_diag = pd.to_datetime(fecha_raw, dayfirst=True).strftime("%d-%m-%Y")
+        except Exception:
+            fecha_diag = fecha_raw
+
+        # 1. TEXTO ANTES DE LA FECHA (Contiene RUT y Nombre del Paciente)
+        prev_end = date_matches[idx-1].end() if idx > 0 else 0
+        before_text = raw_text[prev_end:f_start]
+
+        rut_pac_matches = list(re.finditer(r'(\d{6,8}-[\dkK])', before_text))
+        if rut_pac_matches:
+            last_rut_pac = rut_pac_matches[-1]
+            rut_pac = last_rut_pac.group(1).upper()
+            nom_pac = clean_text_spaces(before_text[last_rut_pac.end():])
+        else:
+            rut_pac = ""
+            nom_pac = clean_text_spaces(before_text)
+
+        # 2. TEXTO DESPUÉS DE LA FECHA (Contiene Profesional, RUT Profesional y respuestas SI/NO)
+        next_start = date_matches[idx+1].start() if idx + 1 < len(date_matches) else len(raw_text)
+        after_text = raw_text[f_end:next_start]
+
+        rut_prof_matches = list(re.finditer(r'(\d{6,8}-[\dkK])', after_text))
+
+        if rut_prof_matches:
+            first_prof_rut = rut_prof_matches[0]
+            rut_prof = first_prof_rut.group(1).upper()
+            nom_prof = clean_text_spaces(after_text[:first_prof_rut.start()])
+            sino_text = after_text[first_prof_rut.end():]
+        else:
+            nom_prof = "NO REGISTRADO"
+            rut_prof = "NO REGISTRADO"
+            sino_text = after_text
+
+        # Extraer respuestas SI / NO
+        all_sino = re.findall(r'(SI|NO)', sino_text, re.IGNORECASE)
+        sino_list = [s.upper() for s in all_sino[-10:]] if len(all_sino) >= 10 else [s.upper() for s in all_sino]
+
+        def get_sino_item(i_idx, default="SI"):
+            if i_idx < len(sino_list):
+                return sino_list[i_idx]
+            return default
+
         num_pauta = count + 1
-        parts = [p.strip() for p in re.split(r'\t|;|\s{2,}', line) if p.strip()]
-        if len(parts) < 3:
-            continue
-
-        ruts = [p for p in parts if re.match(r'^\d{7,8}-[\dkK]$', p)]
-        rut_pac = ruts[0] if len(ruts) >= 1 else ""
-        rut_prof = ruts[1] if len(ruts) >= 2 else ""
-
-        dates = [p for p in parts if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', p)]
-        fecha_diag = dates[0] if dates else datetime.date.today().strftime("%d-%m-%Y")
-
         st.session_state.reg12_data[num_pauta] = {
-            "rut_pac": re.sub(r'[^0-9kK\-]', '', rut_pac).strip().upper(),
-            "nom_pac": clean_text_spaces(parts[1]) if len(parts) > 1 else "",
+            "rut_pac": rut_pac,
+            "nom_pac": nom_pac,
             "fecha_diag": fecha_diag,
-            "nom_prof": clean_text_spaces(parts[3]) if len(parts) > 3 else "NO REGISTRADO",
-            "rut_prof": re.sub(r'[^0-9kK\-]', '', rut_prof).strip().upper() if rut_prof else "NO REGISTRADO",
-            "motivo": "SI", "patologias": "SI", "medicamentos": "SI", "alergias": "SI",
-            "extraoral": "SI", "intraoral": "SI", "diagnostico": "SI", "plan": "SI",
-            "pronostico": "SI", "cumple": "SI"
+            "nom_prof": nom_prof if nom_prof else "NO REGISTRADO",
+            "rut_prof": rut_prof if rut_prof else "NO REGISTRADO",
+            "motivo": get_sino_item(0),
+            "patologias": get_sino_item(1),
+            "medicamentos": get_sino_item(2),
+            "alergias": get_sino_item(3),
+            "extraoral": get_sino_item(4),
+            "intraoral": get_sino_item(5),
+            "diagnostico": get_sino_item(6),
+            "plan": get_sino_item(7),
+            "pronostico": get_sino_item(8),
+            "cumple": get_sino_item(9)
         }
         count += 1
 
