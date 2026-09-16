@@ -197,106 +197,114 @@ def procesar_df_masivo(df, fecha_sup_default):
     return count
 
 
-# --- LÓGICA CARGA MASIVA REG 1.2 AO (GEMA / EXCEL) ---
+# --- LÓGICA CARGA MASIVA REG 1.2 AO (ADAPTADA PARA TEXTO CONCATENADO DE LA GEMA) ---
 def procesar_texto_reg12(texto):
-    lines = [line.strip() for line in texto.strip().split('\n') if line.strip()]
-    if not lines:
+    if not texto or not texto.strip():
         return 0
 
+    raw_text = texto.strip()
+
+    # Expresión regular que detecta registros en texto concatenado
+    record_pattern = re.compile(
+        r'(\d{7,8}-[\dkK])'                        # 1: RUT Paciente
+        r'(.*?)'                                   # 2: Nombre Paciente
+        r'(\d{1,2}/\d{1,2}/\d{2,4})'               # 3: Fecha Diagnóstico
+        r'(.*?)'                                   # 4: Bloque Nombre/RUT Profesional
+        r'((?:SI|NO){10})',                        # 5: Secuencia de 10 respuestas SI/NO
+        re.IGNORECASE | re.DOTALL
+    )
+
+    matches = list(record_pattern.finditer(raw_text))
     count = 0
-    start_idx = 0
-    if 'RUT' in lines[0].upper() or 'PACIENTE' in lines[0].upper():
-        start_idx = 1
+
+    if len(matches) > 0:
+        for m in matches:
+            if count >= 18:
+                break
+            num_pauta = count + 1
+
+            rut_pac = m.group(1).strip().upper()
+            nom_pac = clean_text_spaces(m.group(2))
+            fecha_diag_raw = m.group(3).strip()
+
+            try:
+                fecha_diag = pd.to_datetime(fecha_diag_raw, dayfirst=True).strftime("%d-%m-%Y")
+            except Exception:
+                fecha_diag = fecha_diag_raw
+
+            prof_block = m.group(4).strip()
+            sino_block = m.group(5).strip().upper()
+
+            nom_prof = ""
+            rut_prof = ""
+
+            if "NO REGISTRADO" in prof_block.upper():
+                nom_prof = "NO REGISTRADO"
+                rut_prof = "NO REGISTRADO"
+            else:
+                rut_prof_match = re.search(r'(\d{7,8}-[\dkK])', prof_block)
+                if rut_prof_match:
+                    rut_prof = rut_prof_match.group(1).upper()
+                    nom_prof = clean_text_spaces(prof_block[:rut_prof_match.start()])
+                else:
+                    nom_prof = clean_text_spaces(prof_block)
+                    rut_prof = ""
+
+            sino_list = re.findall(r'(SI|NO)', sino_block)
+
+            def get_sino_item(idx, default="SI"):
+                if idx < len(sino_list):
+                    return sino_list[idx]
+                return default
+
+            st.session_state.reg12_data[num_pauta] = {
+                "rut_pac": rut_pac,
+                "nom_pac": nom_pac,
+                "fecha_diag": fecha_diag,
+                "nom_prof": nom_prof if nom_prof else "NO REGISTRADO",
+                "rut_prof": rut_prof if rut_prof else "NO REGISTRADO",
+                "motivo": get_sino_item(0),
+                "patologias": get_sino_item(1),
+                "medicamentos": get_sino_item(2),
+                "alergias": get_sino_item(3),
+                "extraoral": get_sino_item(4),
+                "intraoral": get_sino_item(5),
+                "diagnostico": get_sino_item(6),
+                "plan": get_sino_item(7),
+                "pronostico": get_sino_item(8),
+                "cumple": get_sino_item(9)
+            }
+            count += 1
+        return count
+
+    # Fallback para tablas con tabulaciones desde Excel
+    lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
+    start_idx = 1 if ('RUT' in lines[0].upper() or 'PACIENTE' in lines[0].upper()) else 0
 
     for line in lines[start_idx:]:
         if count >= 18:
             break
         num_pauta = count + 1
-        parts = [p.strip() for p in line.split('\t')]
-        if len(parts) < 5:
-            parts = [p.strip() for p in re.split(r'\t|;|\s{2,}', line) if p.strip()]
-
-        # Si vienen concatenadas o separadas, extraemos los datos clave por patrones
-        rut_pac = ""
-        nom_pac = ""
-        fecha_diag = ""
-        nom_prof = ""
-        rut_prof = ""
+        parts = [p.strip() for p in re.split(r'\t|;|\s{2,}', line) if p.strip()]
+        if len(parts) < 3:
+            continue
 
         ruts = [p for p in parts if re.match(r'^\d{7,8}-[\dkK]$', p)]
-        if len(ruts) >= 1:
-            rut_pac = ruts[0]
-        if len(ruts) >= 2:
-            rut_prof = ruts[1]
+        rut_pac = ruts[0] if len(ruts) >= 1 else ""
+        rut_prof = ruts[1] if len(ruts) >= 2 else ""
 
         dates = [p for p in parts if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', p)]
-        if dates:
-            try:
-                fecha_diag = pd.to_datetime(dates[0], dayfirst=True).strftime("%d-%m-%Y")
-            except Exception:
-                fecha_diag = dates[0]
-
-        # Mapeo posicional cuando se copia de la gema (15 columnas estándar)
-        if len(parts) >= 15:
-            rut_pac = parts[0] if not rut_pac else rut_pac
-            nom_pac = parts[1]
-            fecha_raw = parts[2]
-            try:
-                fecha_diag = pd.to_datetime(fecha_raw, dayfirst=True).strftime("%d-%m-%Y")
-            except Exception:
-                fecha_diag = fecha_raw
-            nom_prof = parts[3]
-            rut_prof = parts[4] if not rut_prof else rut_prof
-
-            # Criterios SI/NO
-            criterios_vals = [p.upper() for p in parts[5:]]
-            
-            def get_sino(idx_c, default="SI"):
-                if idx_c < len(criterios_vals):
-                    return "SI" if "SI" in criterios_vals[idx_c] else "NO"
-                return default
-
-            p_motivo = get_sino(0)
-            p_patologias = get_sino(1)
-            p_medicamentos = get_sino(2)
-            p_alergias = get_sino(3)
-            p_extraoral = get_sino(4)
-            p_intraoral = get_sino(5)
-            p_diagnostico = get_sino(6)
-            p_plan = get_sino(7)
-            p_pronostico = get_sino(8)
-            p_cumple = get_sino(9)
-        else:
-            # Fallback en caso de formato irregular
-            nom_pac = clean_text_spaces(parts[1]) if len(parts) > 1 else ""
-            nom_prof = clean_text_spaces(parts[3]) if len(parts) > 3 else ""
-            p_motivo = "SI"
-            p_patologias = "SI"
-            p_medicamentos = "SI"
-            p_alergias = "SI"
-            p_extraoral = "SI"
-            p_intraoral = "SI"
-            p_diagnostico = "SI"
-            p_plan = "SI"
-            p_pronostico = "SI"
-            p_cumple = "SI"
+        fecha_diag = dates[0] if dates else datetime.date.today().strftime("%d-%m-%Y")
 
         st.session_state.reg12_data[num_pauta] = {
             "rut_pac": re.sub(r'[^0-9kK\-]', '', rut_pac).strip().upper(),
-            "nom_pac": clean_text_spaces(nom_pac),
-            "fecha_diag": fecha_diag if fecha_diag else datetime.date.today().strftime("%d-%m-%Y"),
-            "nom_prof": clean_text_spaces(nom_prof),
-            "rut_prof": re.sub(r'[^0-9kK\-]', '', rut_prof).strip().upper(),
-            "motivo": p_motivo,
-            "patologias": p_patologias,
-            "medicamentos": p_medicamentos,
-            "alergias": p_alergias,
-            "extraoral": p_extraoral,
-            "intraoral": p_intraoral,
-            "diagnostico": p_diagnostico,
-            "plan": p_plan,
-            "pronostico": p_pronostico,
-            "cumple": p_cumple
+            "nom_pac": clean_text_spaces(parts[1]) if len(parts) > 1 else "",
+            "fecha_diag": fecha_diag,
+            "nom_prof": clean_text_spaces(parts[3]) if len(parts) > 3 else "NO REGISTRADO",
+            "rut_prof": re.sub(r'[^0-9kK\-]', '', rut_prof).strip().upper() if rut_prof else "NO REGISTRADO",
+            "motivo": "SI", "patologias": "SI", "medicamentos": "SI", "alergias": "SI",
+            "extraoral": "SI", "intraoral": "SI", "diagnostico": "SI", "plan": "SI",
+            "pronostico": "SI", "cumple": "SI"
         }
         count += 1
 
@@ -586,21 +594,18 @@ def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
     teal_sub_fill = PatternFill(start_color="00828A", end_color="00828A", fill_type="solid")
     soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
 
-    # Row 1: Titulo
     ws.merge_cells('A1:AK1')
     ws['A1'] = "PAUTA DE SUPERVISIÓN REGISTROS MINIMOS EN FICHA CLÍNICA DENTAL (REG 1.2 AO)"
     ws['A1'].font = bold_font_white
     ws['A1'].fill = navy_header_fill
     ws['A1'].alignment = center_aligned
 
-    # Row 2: Indicaciones
     ws['A2'] = "Indicaciones llenado pauta"
     ws.merge_cells('B2:AK2')
     ws['B2'] = "Marque √ SI cumple, Marque X NO cumple. En item cumple registre SI o NO. Pauta Dicotómica Registre en observaciones motivo incumplimiento."
     ws['A2'].font = bold_font_navy
     ws['B2'].alignment = center_aligned
 
-    # Rows 3-12: Metadata Headers
     metadata_labels = [
         ("Centro", centro),
         ("Año", ano),
@@ -621,15 +626,12 @@ def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
 
     ws.column_dimensions['A'].width = 45
 
-    # Row 13: N° DE PAUTA
     ws.cell(row=13, column=1, value="N° DE PAUTA").font = bold_font_white
     ws.cell(row=13, column=1).fill = teal_sub_fill
 
-    # Row 14: CRITERIOS A EVALUAR
     ws.cell(row=14, column=1, value="CRITERIOS A EVALUAR").font = bold_font_white
     ws.cell(row=14, column=1).fill = teal_sub_fill
 
-    # Items and Category headers mapping
     rows_structure = [
         (15, "1. HISTORIA CLÍNICA", True),
         (16, "1.1 Anamnesis", True),
@@ -662,7 +664,6 @@ def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
     total_cumple = 0
     total_no_cumple = 0
 
-    # Fill Pautas (1 to 18)
     for idx in range(18):
         num_pauta = idx + 1
         col_start = 2 + (idx * 2)
@@ -670,7 +671,6 @@ def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
 
         data = reg_dict.get(num_pauta) or {}
 
-        # General metadata per pauta (Rows 3 to 12)
         ws.merge_cells(start_row=3, start_column=col_start, end_row=3, end_column=col_end)
         ws.cell(row=3, column=col_start, value=centro).alignment = center_aligned
 
@@ -691,19 +691,16 @@ def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
             ws.merge_cells(start_row=r_offset, start_column=col_start, end_row=r_offset, end_column=col_end)
             ws.cell(row=r_offset, column=col_start, value=data.get(k_m, "")).alignment = center_aligned
 
-        # Row 13: Pauta number
         ws.merge_cells(start_row=13, start_column=col_start, end_row=13, end_column=col_end)
         ws.cell(row=13, column=col_start, value=num_pauta).alignment = center_aligned
         ws.cell(row=13, column=col_start).font = bold_font_navy
         ws.cell(row=13, column=col_start).fill = soft_teal_fill
 
-        # Row 14: SI / NO Headers
         ws.cell(row=14, column=col_start, value="SI").alignment = center_aligned
         ws.cell(row=14, column=col_start).font = bold_font_navy
         ws.cell(row=14, column=col_end, value="NO").alignment = center_aligned
         ws.cell(row=14, column=col_end).font = bold_font_navy
 
-        # Criteria rows
         criteria_keys = [
             (17, "motivo"), (18, "patologias"), (19, "medicamentos"), (20, "alergias"),
             (21, "extraoral"), (22, "intraoral"), (24, "diagnostico"), (25, "plan"), (26, "pronostico")
@@ -716,12 +713,10 @@ def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
             elif val_crit == "NO":
                 ws.cell(row=r_i, column=col_end, value="X").alignment = center_aligned
 
-        # Category headers merged empty space across SI/NO
         ws.merge_cells(start_row=15, start_column=col_start, end_row=15, end_column=col_end)
         ws.merge_cells(start_row=16, start_column=col_start, end_row=16, end_column=col_end)
         ws.merge_cells(start_row=23, start_column=col_start, end_row=23, end_column=col_end)
 
-        # Overall Cumple
         c_gen = data.get("cumple", "")
         ws.merge_cells(start_row=27, start_column=col_start, end_row=27, end_column=col_end)
         if c_gen == "SI":
@@ -731,7 +726,6 @@ def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
             ws.cell(row=27, column=col_start, value="NO").alignment = center_aligned
             total_no_cumple += 1
 
-    # Row 28: Totals
     ws.merge_cells('B28:F28')
     ws['B28'] = total_cumple
     ws['B28'].alignment = center_aligned
@@ -756,7 +750,6 @@ def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
     ws['S28'] = porcentaje
     ws['S28'].alignment = center_aligned
 
-    # Rows 29 to 33: Observaciones & Firma
     ws.merge_cells('A29:Q33')
     ws['A29'] = "Observaciones:"
     ws['A29'].font = bold_font_navy
@@ -771,7 +764,6 @@ def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
     ws.row_dimensions[32].height = 20
     ws.row_dimensions[33].height = 20
 
-    # Borders
     for r in range(1, 29):
         for c in range(1, 38):
             ws.cell(row=r, column=c).border = thin_border
@@ -1079,7 +1071,7 @@ elif st.session_state.pagina_activa == "pauta_reg12":
     # Carga Masiva desde Gema
     with st.expander("📥 **Carga Masiva desde Gema / Excel (Copiar y Pegar)**", expanded=False):
         st.write("Pega el cuadro completo generado por la gema aquí abajo:")
-        texto_gema = st.text_area("Pega la tabla de la gema aquí:", height=180, placeholder="RUT PACIENTE\tNOMBRE PACIENTE\tFECHA DIAGNÓSTICO...")
+        texto_gema = st.text_area("Pega la tabla de la gema aquí:", height=180, placeholder="RUT PACIENTENOMBRE PACIENTEFECHA DIAGNÓSTICO...")
         if st.button("⚡ Procesar Cuadro de la Gema", type="primary"):
             if texto_gema.strip():
                 cargadas_r = procesar_texto_reg12(texto_gema)
