@@ -73,7 +73,7 @@ st.markdown("""
 if 'pagina_activa' not in st.session_state:
     st.session_state.pagina_activa = "inicio"
 
-# Datos Pauta 1: Pausa Dental (18)
+# 1. Pauta: Pausa Dental (18)
 if 'pautas_data' not in st.session_state:
     st.session_state.pautas_data = {i: None for i in range(1, 19)}
 if 'pauta_actual' not in st.session_state:
@@ -81,7 +81,7 @@ if 'pauta_actual' not in st.session_state:
 if 'ultimo_centro' not in st.session_state:
     st.session_state.ultimo_centro = ""
 
-# Datos Pauta 2: Higiene de Manos (12)
+# 2. Pauta: Higiene de Manos (12)
 if 'higiene_data' not in st.session_state:
     st.session_state.higiene_data = {i: None for i in range(1, 13)}
 if 'higiene_actual' not in st.session_state:
@@ -95,6 +95,22 @@ if 'evaluador_higiene' not in st.session_state:
 if 'responsable_higiene' not in st.session_state:
     st.session_state.responsable_higiene = ""
 
+# 3. Pauta: REG 1.2 AO (18)
+if 'reg12_data' not in st.session_state:
+    st.session_state.reg12_data = {i: None for i in range(1, 19)}
+if 'reg12_actual' not in st.session_state:
+    st.session_state.reg12_actual = 1
+if 'centro_reg12' not in st.session_state:
+    st.session_state.centro_reg12 = "CD LA REINA"
+if 'ano_reg12' not in st.session_state:
+    st.session_state.ano_reg12 = "2026"
+if 'mes_reg12' not in st.session_state:
+    st.session_state.mes_reg12 = "JULIO"
+if 'grupo_reg12' not in st.session_state:
+    st.session_state.grupo_reg12 = "DENTAL"
+if 'especialidad_reg12' not in st.session_state:
+    st.session_state.especialidad_reg12 = "ODONTOLOGÍA GENERAL"
+
 
 def parse_fecha(fecha_str):
     if fecha_str:
@@ -102,20 +118,20 @@ def parse_fecha(fecha_str):
             return datetime.datetime.strptime(str(fecha_str).strip(), "%d-%m-%Y").date()
         except Exception:
             try:
-                return pd.to_datetime(fecha_str).date()
+                return pd.to_datetime(fecha_str, dayfirst=True).date()
             except Exception:
                 pass
     return datetime.date.today()
 
 
 def clean_text_spaces(text):
-    if not text:
+    if not text or pd.isna(text):
         return ""
     cleaned = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s\.]', '', str(text))
     return re.sub(r'\s+', ' ', cleaned).strip().upper()
 
 
-# --- LÓGICA DE CARGA MASIVA PAUSA DENTAL ---
+# --- LÓGICA CARGA MASIVA PAUSA DENTAL ---
 def procesar_df_masivo(df, fecha_sup_default):
     df.columns = [str(c).strip().lower() for c in df.columns]
     
@@ -144,7 +160,7 @@ def procesar_df_masivo(df, fecha_sup_default):
         
         fecha_atencion_raw = get_val(row, ['fecha de ejecución', 'fecha atencion', 'fecha_atencion', 'fecha'])
         try:
-            fecha_atencion_clean = pd.to_datetime(fecha_atencion_raw).strftime("%d-%m-%Y")
+            fecha_atencion_clean = pd.to_datetime(fecha_atencion_raw, dayfirst=True).strftime("%d-%m-%Y")
         except Exception:
             fecha_atencion_clean = fecha_sup_default.strftime("%d-%m-%Y")
             
@@ -181,22 +197,124 @@ def procesar_df_masivo(df, fecha_sup_default):
     return count
 
 
+# --- LÓGICA CARGA MASIVA REG 1.2 AO (GEMA / EXCEL) ---
+def procesar_texto_reg12(texto):
+    lines = [line.strip() for line in texto.strip().split('\n') if line.strip()]
+    if not lines:
+        return 0
+
+    count = 0
+    start_idx = 0
+    if 'RUT' in lines[0].upper() or 'PACIENTE' in lines[0].upper():
+        start_idx = 1
+
+    for line in lines[start_idx:]:
+        if count >= 18:
+            break
+        num_pauta = count + 1
+        parts = [p.strip() for p in line.split('\t')]
+        if len(parts) < 5:
+            parts = [p.strip() for p in re.split(r'\t|;|\s{2,}', line) if p.strip()]
+
+        # Si vienen concatenadas o separadas, extraemos los datos clave por patrones
+        rut_pac = ""
+        nom_pac = ""
+        fecha_diag = ""
+        nom_prof = ""
+        rut_prof = ""
+
+        ruts = [p for p in parts if re.match(r'^\d{7,8}-[\dkK]$', p)]
+        if len(ruts) >= 1:
+            rut_pac = ruts[0]
+        if len(ruts) >= 2:
+            rut_prof = ruts[1]
+
+        dates = [p for p in parts if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', p)]
+        if dates:
+            try:
+                fecha_diag = pd.to_datetime(dates[0], dayfirst=True).strftime("%d-%m-%Y")
+            except Exception:
+                fecha_diag = dates[0]
+
+        # Mapeo posicional cuando se copia de la gema (15 columnas estándar)
+        if len(parts) >= 15:
+            rut_pac = parts[0] if not rut_pac else rut_pac
+            nom_pac = parts[1]
+            fecha_raw = parts[2]
+            try:
+                fecha_diag = pd.to_datetime(fecha_raw, dayfirst=True).strftime("%d-%m-%Y")
+            except Exception:
+                fecha_diag = fecha_raw
+            nom_prof = parts[3]
+            rut_prof = parts[4] if not rut_prof else rut_prof
+
+            # Criterios SI/NO
+            criterios_vals = [p.upper() for p in parts[5:]]
+            
+            def get_sino(idx_c, default="SI"):
+                if idx_c < len(criterios_vals):
+                    return "SI" if "SI" in criterios_vals[idx_c] else "NO"
+                return default
+
+            p_motivo = get_sino(0)
+            p_patologias = get_sino(1)
+            p_medicamentos = get_sino(2)
+            p_alergias = get_sino(3)
+            p_extraoral = get_sino(4)
+            p_intraoral = get_sino(5)
+            p_diagnostico = get_sino(6)
+            p_plan = get_sino(7)
+            p_pronostico = get_sino(8)
+            p_cumple = get_sino(9)
+        else:
+            # Fallback en caso de formato irregular
+            nom_pac = clean_text_spaces(parts[1]) if len(parts) > 1 else ""
+            nom_prof = clean_text_spaces(parts[3]) if len(parts) > 3 else ""
+            p_motivo = "SI"
+            p_patologias = "SI"
+            p_medicamentos = "SI"
+            p_alergias = "SI"
+            p_extraoral = "SI"
+            p_intraoral = "SI"
+            p_diagnostico = "SI"
+            p_plan = "SI"
+            p_pronostico = "SI"
+            p_cumple = "SI"
+
+        st.session_state.reg12_data[num_pauta] = {
+            "rut_pac": re.sub(r'[^0-9kK\-]', '', rut_pac).strip().upper(),
+            "nom_pac": clean_text_spaces(nom_pac),
+            "fecha_diag": fecha_diag if fecha_diag else datetime.date.today().strftime("%d-%m-%Y"),
+            "nom_prof": clean_text_spaces(nom_prof),
+            "rut_prof": re.sub(r'[^0-9kK\-]', '', rut_prof).strip().upper(),
+            "motivo": p_motivo,
+            "patologias": p_patologias,
+            "medicamentos": p_medicamentos,
+            "alergias": p_alergias,
+            "extraoral": p_extraoral,
+            "intraoral": p_intraoral,
+            "diagnostico": p_diagnostico,
+            "plan": p_plan,
+            "pronostico": p_pronostico,
+            "cumple": p_cumple
+        }
+        count += 1
+
+    return count
+
+
 # --- EXCEL 1: CONSOLIDADO PAUSA DENTAL ---
 def generar_excel_pausa_dental(pautas_dict):
     wb = Workbook()
     ws = wb.active
     ws.title = "Consolidado Pautas"
 
-    thin_border = Border(
-        left=Side(style='thin', color='000000'), right=Side(style='thin', color='000000'), 
-        top=Side(style='thin', color='000000'), bottom=Side(style='thin', color='000000')
-    )
+    thin_border = Border(left=Side(style='thin', color='000000'), right=Side(style='thin', color='000000'), top=Side(style='thin', color='000000'), bottom=Side(style='thin', color='000000'))
     center_aligned = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left_aligned = Alignment(horizontal="left", vertical="center", wrap_text=True)
     
     bold_font_white = Font(bold=True, color="FFFFFF")
     bold_font_navy = Font(bold=True, color="00205B")
-    
     navy_header_fill = PatternFill(start_color="00205B", end_color="00205B", fill_type="solid")
     teal_sub_fill = PatternFill(start_color="00828A", end_color="00828A", fill_type="solid")
     soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
@@ -213,13 +331,7 @@ def generar_excel_pausa_dental(pautas_dict):
     ws['A2'].font = bold_font_navy
     ws['B2'].alignment = center_aligned
 
-    etiquetas = [
-        "Centro", "Fecha de Supervisión", "Nombre de la persona supervisada", 
-        "Apellido(s) de la persona supervisada", "RUT del paciente", 
-        "Fecha de Atención supervisada", 
-        "Servicio Clínico donde se realizó el procedimiento, ya sea Sala de Procedimiento Dental (BD), Pabellón de Cirugía menor Dental (PD), e Imagenología Dental (RX)",
-        "Procedimiento corresponde a Exodoncia (SI, NO)"
-    ]
+    etiquetas = ["Centro", "Fecha de Supervisión", "Nombre de la persona supervisada", "Apellido(s) de la persona supervisada", "RUT del paciente", "Fecha de Atención supervisada", "Servicio Clínico donde se realizó el procedimiento, ya sea Sala de Procedimiento Dental (BD), Pabellón de Cirugía menor Dental (PD), e Imagenología Dental (RX)", "Procedimiento corresponde a Exodoncia (SI, NO)"]
 
     for i, etiqueta in enumerate(etiquetas, start=3):
         ws.cell(row=i, column=1, value=etiqueta).font = bold_font_navy
@@ -334,16 +446,12 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     ws = wb.active
     ws.title = "Higiene de Manos"
 
-    thin_border = Border(
-        left=Side(style='thin', color='000000'), right=Side(style='thin', color='000000'), 
-        top=Side(style='thin', color='000000'), bottom=Side(style='thin', color='000000')
-    )
+    thin_border = Border(left=Side(style='thin', color='000000'), right=Side(style='thin', color='000000'), top=Side(style='thin', color='000000'), bottom=Side(style='thin', color='000000'))
     center_aligned = Alignment(horizontal="center", vertical="center", wrap_text=True)
     left_aligned = Alignment(horizontal="left", vertical="center", wrap_text=True)
     
     bold_font_white = Font(bold=True, color="FFFFFF")
     bold_font_navy = Font(bold=True, color="00205B")
-    
     navy_header_fill = PatternFill(start_color="00205B", end_color="00205B", fill_type="solid")
     soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
 
@@ -385,7 +493,6 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     for idx in range(12):
         num = idx + 1
         col = idx + 2
-        
         ws.column_dimensions[get_column_letter(col)].width = 15
         
         ws.cell(row=5, column=col, value=num).alignment = center_aligned
@@ -395,7 +502,6 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
         ws.cell(row=6, column=col, value=data.get("fecha_eval", "")).alignment = center_aligned
         ws.cell(row=7, column=col, value=data.get("evaluador", "")).alignment = center_aligned
         ws.cell(row=8, column=col, value=data.get("evaluado", "")).alignment = center_aligned
-
         ws.cell(row=11, column=col, value=data.get("oportunidad", "")).alignment = center_aligned
         
         cumple = data.get("cumple", "")
@@ -410,13 +516,7 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     ws['A14'].font = bold_font_navy
     ws['A14'].fill = soft_teal_fill
 
-    leyendas = [
-        "1. Antes del contacto con el paciente",
-        "2. Antes de una técnica aséptica",
-        "3. Después de la exposición a fluidos corporales o manejo de fluidos contaminados",
-        "4. Después del contacto con el paciente",
-        "5. Después de tener contacto con la zona alrededor del paciente"
-    ]
+    leyendas = ["1. Antes del contacto con el paciente", "2. Antes de una técnica aséptica", "3. Después de la exposición a fluidos corporales o manejo de fluidos contaminados", "4. Después del contacto con el paciente", "5. Después de tener contacto con la zona alrededor del paciente"]
     for i, ley in enumerate(leyendas, start=15):
         ws.merge_cells(start_row=i, start_column=1, end_row=i, end_column=5)
         ws.cell(row=i, column=1, value=ley).alignment = left_aligned
@@ -436,7 +536,6 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     ws['B25'] = responsable
     ws['B25'].alignment = left_aligned
 
-    # APLICACIÓN DELIMITADA DE BORDES
     for c in range(1, 14):
         ws.cell(row=1, column=c).border = thin_border
 
@@ -471,6 +570,222 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     return output
 
 
+# --- EXCEL 3: CONSOLIDADO REG 1.2 AO (REGISTROS MÍNIMOS EN FICHA CLÍNICA) ---
+def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Consolidado REG 1.2"
+
+    thin_border = Border(left=Side(style='thin', color='000000'), right=Side(style='thin', color='000000'), top=Side(style='thin', color='000000'), bottom=Side(style='thin', color='000000'))
+    center_aligned = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left_aligned = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    
+    bold_font_white = Font(bold=True, color="FFFFFF")
+    bold_font_navy = Font(bold=True, color="00205B")
+    navy_header_fill = PatternFill(start_color="00205B", end_color="00205B", fill_type="solid")
+    teal_sub_fill = PatternFill(start_color="00828A", end_color="00828A", fill_type="solid")
+    soft_teal_fill = PatternFill(start_color="E6F7F5", end_color="E6F7F5", fill_type="solid")
+
+    # Row 1: Titulo
+    ws.merge_cells('A1:AK1')
+    ws['A1'] = "PAUTA DE SUPERVISIÓN REGISTROS MINIMOS EN FICHA CLÍNICA DENTAL (REG 1.2 AO)"
+    ws['A1'].font = bold_font_white
+    ws['A1'].fill = navy_header_fill
+    ws['A1'].alignment = center_aligned
+
+    # Row 2: Indicaciones
+    ws['A2'] = "Indicaciones llenado pauta"
+    ws.merge_cells('B2:AK2')
+    ws['B2'] = "Marque √ SI cumple, Marque X NO cumple. En item cumple registre SI o NO. Pauta Dicotómica Registre en observaciones motivo incumplimiento."
+    ws['A2'].font = bold_font_navy
+    ws['B2'].alignment = center_aligned
+
+    # Rows 3-12: Metadata Headers
+    metadata_labels = [
+        ("Centro", centro),
+        ("Año", ano),
+        ("Mes", mes),
+        ("Grupo", grupo),
+        ("Especialidad", especialidad),
+        ("RUT Paciente", "rut_pac"),
+        ("Nombre Paciente", "nom_pac"),
+        ("Fecha", "fecha_diag"),
+        ("Nombre Profesional", "nom_prof"),
+        ("RUT Profesional", "rut_prof")
+    ]
+
+    for idx, (label, val_key) in enumerate(metadata_labels, start=3):
+        ws.cell(row=idx, column=1, value=label).font = bold_font_navy
+        ws.cell(row=idx, column=1).fill = soft_teal_fill
+        ws.cell(row=idx, column=1).alignment = left_aligned
+
+    ws.column_dimensions['A'].width = 45
+
+    # Row 13: N° DE PAUTA
+    ws.cell(row=13, column=1, value="N° DE PAUTA").font = bold_font_white
+    ws.cell(row=13, column=1).fill = teal_sub_fill
+
+    # Row 14: CRITERIOS A EVALUAR
+    ws.cell(row=14, column=1, value="CRITERIOS A EVALUAR").font = bold_font_white
+    ws.cell(row=14, column=1).fill = teal_sub_fill
+
+    # Items and Category headers mapping
+    rows_structure = [
+        (15, "1. HISTORIA CLÍNICA", True),
+        (16, "1.1 Anamnesis", True),
+        (17, "Motivo de Consulta", "motivo"),
+        (18, "Patologías", "patologias"),
+        (19, "Medicamentos", "medicamentos"),
+        (20, "Alergias", "alergias"),
+        (21, "1.2. Examen Extraoral", "extraoral"),
+        (22, "1.3. Examen Intraoral", "intraoral"),
+        (23, "2. DIAGNÓSTICO Y PLAN DE TRATAMIENTO", True),
+        (24, "2.1. Diagnóstico (definitivo)", "diagnostico"),
+        (25, "2.2. Plan de Tratamiento inicial", "plan"),
+        (26, "2.3. Pronóstico", "pronostico"),
+        (27, "Cumple (SI/NO)", "cumple_summary")
+    ]
+
+    for r_num, title, *is_cat in rows_structure:
+        ws.cell(row=r_num, column=1, value=title)
+        ws.cell(row=r_num, column=1).alignment = left_aligned
+        if is_cat and is_cat[0] is True:
+            ws.cell(row=r_num, column=1).font = bold_font_navy
+            ws.cell(row=r_num, column=1).fill = soft_teal_fill
+        elif r_num == 27:
+            ws.cell(row=r_num, column=1).font = bold_font_navy
+            ws.cell(row=r_num, column=1).fill = soft_teal_fill
+
+    ws.cell(row=28, column=1, value="Total Cumple").font = bold_font_navy
+    ws.cell(row=28, column=1).fill = soft_teal_fill
+
+    total_cumple = 0
+    total_no_cumple = 0
+
+    # Fill Pautas (1 to 18)
+    for idx in range(18):
+        num_pauta = idx + 1
+        col_start = 2 + (idx * 2)
+        col_end = col_start + 1
+
+        data = reg_dict.get(num_pauta) or {}
+
+        # General metadata per pauta (Rows 3 to 12)
+        ws.merge_cells(start_row=3, start_column=col_start, end_row=3, end_column=col_end)
+        ws.cell(row=3, column=col_start, value=centro).alignment = center_aligned
+
+        ws.merge_cells(start_row=4, start_column=col_start, end_row=4, end_column=col_end)
+        ws.cell(row=4, column=col_start, value=ano).alignment = center_aligned
+
+        ws.merge_cells(start_row=5, start_column=col_start, end_row=5, end_column=col_end)
+        ws.cell(row=5, column=col_start, value=mes).alignment = center_aligned
+
+        ws.merge_cells(start_row=6, start_column=col_start, end_row=6, end_column=col_end)
+        ws.cell(row=6, column=col_start, value=grupo).alignment = center_aligned
+
+        ws.merge_cells(start_row=7, start_column=col_start, end_row=7, end_column=col_end)
+        ws.cell(row=7, column=col_start, value=especialidad).alignment = center_aligned
+
+        keys_meta = ["rut_pac", "nom_pac", "fecha_diag", "nom_prof", "rut_prof"]
+        for r_offset, k_m in enumerate(keys_meta, start=8):
+            ws.merge_cells(start_row=r_offset, start_column=col_start, end_row=r_offset, end_column=col_end)
+            ws.cell(row=r_offset, column=col_start, value=data.get(k_m, "")).alignment = center_aligned
+
+        # Row 13: Pauta number
+        ws.merge_cells(start_row=13, start_column=col_start, end_row=13, end_column=col_end)
+        ws.cell(row=13, column=col_start, value=num_pauta).alignment = center_aligned
+        ws.cell(row=13, column=col_start).font = bold_font_navy
+        ws.cell(row=13, column=col_start).fill = soft_teal_fill
+
+        # Row 14: SI / NO Headers
+        ws.cell(row=14, column=col_start, value="SI").alignment = center_aligned
+        ws.cell(row=14, column=col_start).font = bold_font_navy
+        ws.cell(row=14, column=col_end, value="NO").alignment = center_aligned
+        ws.cell(row=14, column=col_end).font = bold_font_navy
+
+        # Criteria rows
+        criteria_keys = [
+            (17, "motivo"), (18, "patologias"), (19, "medicamentos"), (20, "alergias"),
+            (21, "extraoral"), (22, "intraoral"), (24, "diagnostico"), (25, "plan"), (26, "pronostico")
+        ]
+
+        for r_i, k_i in criteria_keys:
+            val_crit = data.get(k_i, "")
+            if val_crit == "SI":
+                ws.cell(row=r_i, column=col_start, value="√").alignment = center_aligned
+            elif val_crit == "NO":
+                ws.cell(row=r_i, column=col_end, value="X").alignment = center_aligned
+
+        # Category headers merged empty space across SI/NO
+        ws.merge_cells(start_row=15, start_column=col_start, end_row=15, end_column=col_end)
+        ws.merge_cells(start_row=16, start_column=col_start, end_row=16, end_column=col_end)
+        ws.merge_cells(start_row=23, start_column=col_start, end_row=23, end_column=col_end)
+
+        # Overall Cumple
+        c_gen = data.get("cumple", "")
+        ws.merge_cells(start_row=27, start_column=col_start, end_row=27, end_column=col_end)
+        if c_gen == "SI":
+            ws.cell(row=27, column=col_start, value="SI").alignment = center_aligned
+            total_cumple += 1
+        elif c_gen == "NO":
+            ws.cell(row=27, column=col_start, value="NO").alignment = center_aligned
+            total_no_cumple += 1
+
+    # Row 28: Totals
+    ws.merge_cells('B28:F28')
+    ws['B28'] = total_cumple
+    ws['B28'].alignment = center_aligned
+
+    ws.merge_cells('G28:J28')
+    ws['G28'] = "Total No Cumple"
+    ws['G28'].font = bold_font_navy
+    ws['G28'].alignment = center_aligned
+
+    ws.merge_cells('K28:N28')
+    ws['K28'] = total_no_cumple
+    ws['K28'].alignment = center_aligned
+
+    ws.merge_cells('O28:R28')
+    ws['O28'] = "% Cumplimiento"
+    ws['O28'].font = bold_font_navy
+    ws['O28'].alignment = center_aligned
+
+    completadas = sum(1 for v in reg_dict.values() if v is not None)
+    porcentaje = f"{(total_cumple/18)*100:.1f}%" if completadas == 18 else f"{(total_cumple/completadas)*100:.1f}%" if completadas > 0 else "-"
+    ws.merge_cells('S28:V28')
+    ws['S28'] = porcentaje
+    ws['S28'].alignment = center_aligned
+
+    # Rows 29 to 33: Observaciones & Firma
+    ws.merge_cells('A29:Q33')
+    ws['A29'] = "Observaciones:"
+    ws['A29'].font = bold_font_navy
+    ws['A29'].alignment = Alignment(horizontal="left", vertical="top")
+
+    ws.merge_cells('R29:U31')
+    ws.merge_cells('R32:U33')
+    ws['R32'] = "Nombre o Timbre\ndel responsable de\naplicar la pauta"
+    ws['R32'].font = bold_font_navy
+    ws['R32'].alignment = center_aligned
+
+    ws.row_dimensions[32].height = 20
+    ws.row_dimensions[33].height = 20
+
+    # Borders
+    for r in range(1, 29):
+        for c in range(1, 38):
+            ws.cell(row=r, column=c).border = thin_border
+
+    for r in range(29, 34):
+        for c in range(1, 22):
+            ws.cell(row=r, column=c).border = thin_border
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
+
 # ==============================================================================
 # --- VISTA 1: PORTAL DE INICIO ---
 # ==============================================================================
@@ -480,6 +795,7 @@ if st.session_state.pagina_activa == "inicio":
 
     st.markdown("---")
 
+    # Tarjeta 1: Pausa de Seguridad Dental
     st.markdown("""
     <div class="card-pauta">
         <h3 style="margin-top:0; color:#00205B;">🦷 Pausa de Seguridad Dental (GCL 2.1 AO)</h3>
@@ -494,6 +810,7 @@ if st.session_state.pagina_activa == "inicio":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # Tarjeta 2: Higiene de Manos
     st.markdown("""
     <div class="card-pauta">
         <h3 style="margin-top:0; color:#00205B;">🧼 Higiene de Manos - Área Dental (GCL 1.2)</h3>
@@ -504,6 +821,21 @@ if st.session_state.pagina_activa == "inicio":
     
     if st.button("🚀 Ingresar a Higiene de Manos Dental", type="primary", use_container_width=True):
         st.session_state.pagina_activa = "pauta_higiene"
+        st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Tarjeta 3: REG 1.2 AO
+    st.markdown("""
+    <div class="card-pauta">
+        <h3 style="margin-top:0; color:#00205B;">📄 Registros Mínimos en Ficha Clínica Dental (REG 1.2 AO)</h3>
+        <p>Supervisión de Anamnesis, Examen Físico, Diagnóstico, Plan de Tratamiento y Pronóstico en Ficha Clínica.</p>
+        <p><b>Formato:</b> Consolidado de 18 Pautas con Carga Masiva desde Gema.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if st.button("🚀 Ingresar a REG 1.2 AO (Registros Mínimos Ficha Clínica)", type="primary", use_container_width=True):
+        st.session_state.pagina_activa = "pauta_reg12"
         st.rerun()
 
 
@@ -617,7 +949,6 @@ elif st.session_state.pagina_activa == "pauta_dental":
         st.session_state.pauta_actual = 1
         st.rerun()
 
-    # RESTAURACIÓN TABLA DE RESUMEN
     pautas_list = [v for v in st.session_state.pautas_data.values() if v is not None]
     if len(pautas_list) > 0:
         with st.expander(f"📋 Ver resumen de pautas guardadas ({len(pautas_list)}/18)", expanded=True):
@@ -717,8 +1048,142 @@ elif st.session_state.pagina_activa == "pauta_higiene":
         st.session_state.higiene_actual = 1
         st.rerun()
 
-    # RESTAURACIÓN TABLA DE RESUMEN
     higiene_list = [v for v in st.session_state.higiene_data.values() if v is not None]
     if len(higiene_list) > 0:
         with st.expander(f"📋 Ver resumen de evaluaciones guardadas ({len(higiene_list)}/12)", expanded=True):
             st.dataframe(pd.DataFrame(higiene_list), use_container_width=True)
+
+
+# ==============================================================================
+# --- VISTA 4: REGISTROS MÍNIMOS EN FICHA CLÍNICA DENTAL (REG 1.2 AO) ---
+# ==============================================================================
+elif st.session_state.pagina_activa == "pauta_reg12":
+    if st.button("⬅️ Volver al Portal de Inicio", use_container_width=True):
+        st.session_state.pagina_activa = "inicio"
+        st.rerun()
+
+    st.markdown("---")
+    st.title("RedSalud | Registros Mínimos en Ficha Clínica Dental (REG 1.2 AO)")
+
+    # Datos Generales
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.session_state.centro_reg12 = clean_text_spaces(st.text_input("Centro", value=st.session_state.centro_reg12))
+        st.session_state.grupo_reg12 = clean_text_spaces(st.text_input("Grupo", value=st.session_state.grupo_reg12))
+    with c2:
+        st.session_state.ano_reg12 = clean_text_spaces(st.text_input("Año", value=st.session_state.ano_reg12))
+        st.session_state.especialidad_reg12 = clean_text_spaces(st.text_input("Especialidad", value=st.session_state.especialidad_reg12))
+    with c3:
+        st.session_state.mes_reg12 = clean_text_spaces(st.text_input("Mes", value=st.session_state.mes_reg12))
+
+    # Carga Masiva desde Gema
+    with st.expander("📥 **Carga Masiva desde Gema / Excel (Copiar y Pegar)**", expanded=False):
+        st.write("Pega el cuadro completo generado por la gema aquí abajo:")
+        texto_gema = st.text_area("Pega la tabla de la gema aquí:", height=180, placeholder="RUT PACIENTE\tNOMBRE PACIENTE\tFECHA DIAGNÓSTICO...")
+        if st.button("⚡ Procesar Cuadro de la Gema", type="primary"):
+            if texto_gema.strip():
+                cargadas_r = procesar_texto_reg12(texto_gema)
+                st.success(f"✅ ¡Se cargaron {cargadas_r} pautas de REG 1.2 AO automáticamente!")
+                st.rerun()
+            else:
+                st.warning("Pega el texto antes de procesar.")
+
+    st.markdown("---")
+    completadas_r = sum(1 for v in st.session_state.reg12_data.values() if v is not None)
+    st.progress(completadas_r / 18)
+    st.caption(f"Progreso global: **{completadas_r} de 18 pautas guardadas**")
+
+    r_num = st.selectbox(
+        "Selecciona la pauta a ingresar o revisar:",
+        options=list(range(1, 19)),
+        index=st.session_state.reg12_actual - 1,
+        format_func=lambda num: f"Pauta N° {num} ({'✅ Guardada' if st.session_state.reg12_data[num] is not None else '⏳ Pendiente'})"
+    )
+
+    st.session_state.reg12_actual = r_num
+    datos_r = st.session_state.reg12_data[r_num] or {}
+
+    st.markdown('<div class="card-pauta">', unsafe_allow_html=True)
+    st.subheader(f"Formulario Pauta N° {r_num}")
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        rut_pac = st.text_input("RUT Paciente", value=datos_r.get('rut_pac', ''), key=f"rp_{r_num}")
+        nom_pac = st.text_input("Nombre Paciente", value=datos_r.get('nom_pac', ''), key=f"np_{r_num}")
+        fecha_diag = st.date_input("Fecha Diagnóstico", value=parse_fecha(datos_r.get('fecha_diag')), key=f"fd_{r_num}")
+    with col_b:
+        nom_prof = st.text_input("Nombre Profesional", value=datos_r.get('nom_prof', ''), key=f"npr_{r_num}")
+        rut_prof = st.text_input("RUT Profesional", value=datos_r.get('rut_prof', ''), key=f"rpr_{r_num}")
+
+    st.markdown("---")
+    st.markdown("**1. HISTORIA CLÍNICA**")
+    st.markdown("*1.1 Anamnesis*")
+    
+    m_motivo = st.radio("Motivo de Consulta", ["SI", "NO"], index=0 if datos_r.get('motivo') != "NO" else 1, key=f"r_mot_{r_num}")
+    m_pat = st.radio("Patologías", ["SI", "NO"], index=0 if datos_r.get('patologias') != "NO" else 1, key=f"r_pat_{r_num}")
+    m_med = st.radio("Medicamentos", ["SI", "NO"], index=0 if datos_r.get('medicamentos') != "NO" else 1, key=f"r_med_{r_num}")
+    m_ale = st.radio("Alergias", ["SI", "NO"], index=0 if datos_r.get('alergias') != "NO" else 1, key=f"r_ale_{r_num}")
+
+    st.markdown("*Exámenes Fisicos*")
+    m_ext = st.radio("1.2. Examen Extraoral", ["SI", "NO"], index=0 if datos_r.get('extraoral') != "NO" else 1, key=f"r_ext_{r_num}")
+    m_int = st.radio("1.3. Examen Intraoral", ["SI", "NO"], index=0 if datos_r.get('intraoral') != "NO" else 1, key=f"r_int_{r_num}")
+
+    st.markdown("---")
+    st.markdown("**2. DIAGNÓSTICO Y PLAN DE TRATAMIENTO**")
+    m_dia = st.radio("2.1. Diagnóstico (definitivo)", ["SI", "NO"], index=0 if datos_r.get('diagnostico') != "NO" else 1, key=f"r_dia_{r_num}")
+    m_pla = st.radio("2.2. Plan de Tratamiento inicial", ["SI", "NO"], index=0 if datos_r.get('plan') != "NO" else 1, key=f"r_pla_{r_num}")
+    m_pro = st.radio("2.3. Pronóstico", ["SI", "NO"], index=0 if datos_r.get('pronostico') != "NO" else 1, key=f"r_pro_{r_num}")
+
+    st.markdown("---")
+    m_cum = st.radio("Cumple (SI/NO)", ["SI", "NO"], index=0 if datos_r.get('cumple') != "NO" else 1, key=f"r_cum_{r_num}")
+
+    if st.button(f"💾 Guardar Pauta REG 1.2 N° {r_num}", type="primary", use_container_width=True, key=f"btn_reg_{r_num}"):
+        st.session_state.reg12_data[r_num] = {
+            "rut_pac": re.sub(r'[^0-9kK\-]', '', rut_pac).strip().upper(),
+            "nom_pac": clean_text_spaces(nom_pac),
+            "fecha_diag": fecha_diag.strftime("%d-%m-%Y"),
+            "nom_prof": clean_text_spaces(nom_prof),
+            "rut_prof": re.sub(r'[^0-9kK\-]', '', rut_prof).strip().upper(),
+            "motivo": m_motivo,
+            "patologias": m_pat,
+            "medicamentos": m_med,
+            "alergias": m_ale,
+            "extraoral": m_ext,
+            "intraoral": m_int,
+            "diagnostico": m_dia,
+            "plan": m_pla,
+            "pronostico": m_pro,
+            "cumple": m_cum
+        }
+        if r_num < 18:
+            st.session_state.reg12_actual = r_num + 1
+        st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    excel_reg12 = generar_excel_reg12(
+        st.session_state.reg12_data,
+        st.session_state.centro_reg12,
+        st.session_state.ano_reg12,
+        st.session_state.mes_reg12,
+        st.session_state.grupo_reg12,
+        st.session_state.especialidad_reg12
+    )
+
+    st.download_button(
+        label="📥 Descargar Excel Consolidado REG 1.2 AO",
+        data=excel_reg12,
+        file_name="Consolidado_Registros_Minimos_Ficha_Clinica_REG12.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
+
+    if st.button("🔄 Reiniciar todo y borrar pautas REG 1.2", use_container_width=True):
+        st.session_state.reg12_data = {i: None for i in range(1, 19)}
+        st.session_state.reg12_actual = 1
+        st.rerun()
+
+    reg12_list = [v for v in st.session_state.reg12_data.values() if v is not None]
+    if len(reg12_list) > 0:
+        with st.expander(f"📋 Ver resumen de pautas guardadas ({len(reg12_list)}/18)", expanded=True):
+            st.dataframe(pd.DataFrame(reg12_list), use_container_width=True)
