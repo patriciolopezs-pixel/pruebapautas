@@ -197,91 +197,84 @@ def procesar_df_masivo(df, fecha_sup_default):
     return count
 
 
-# --- LÓGICA CARGA MASIVA REG 1.2 AO (ANALIZADOR DE TEXTO DE LA GEMA) ---
+# --- LÓGICA CARGA MASIVA REG 1.2 AO ---
 def procesar_texto_reg12(texto):
     if not texto or not texto.strip():
         return 0
 
     raw_text = texto.strip()
 
-    # Buscar todas las fechas de diagnóstico (DD/MM/YYYY o DD-MM-YYYY)
-    date_matches = list(re.finditer(r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', raw_text))
+    # Expresión regular para capturar el patrón de cada registro completo
+    record_pattern = re.compile(
+        r'(\d{6,8}-[\dkK])\s*'                     # Group 1: RUT Paciente
+        r'([A-Za-zÁÉÍÓÚáéíóúÑñ\s\.]+?)\s*'         # Group 2: Nombre Paciente
+        r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*'      # Group 3: Fecha Diagnóstico
+        r'(.*?)\s*'                                # Group 4: Info Profesional
+        r'((?:SI|NO|\s|\t){10,30})',               # Group 5: Bloque respuestas SI/NO
+        re.IGNORECASE
+    )
 
-    if not date_matches:
-        return 0
-
+    matches = list(record_pattern.finditer(raw_text))
     count = 0
 
-    for idx, d_match in enumerate(date_matches):
-        if count >= 18:
-            break
+    if len(matches) > 0:
+        for m in matches:
+            if count >= 18:
+                break
 
-        fecha_raw = d_match.group(1)
-        f_start = d_match.start()
-        f_end = d_match.end()
+            rut_pac = m.group(1).strip().upper()
+            nom_pac = clean_text_spaces(m.group(2))
+            fecha_raw = m.group(3).strip()
 
-        try:
-            fecha_diag = pd.to_datetime(fecha_raw, dayfirst=True).strftime("%d-%m-%Y")
-        except Exception:
-            fecha_diag = fecha_raw
+            try:
+                fecha_diag = pd.to_datetime(fecha_raw, dayfirst=True).strftime("%d-%m-%Y")
+            except Exception:
+                fecha_diag = fecha_raw
 
-        # 1. TEXTO ANTES DE LA FECHA (Contiene RUT y Nombre del Paciente)
-        prev_end = date_matches[idx-1].end() if idx > 0 else 0
-        before_text = raw_text[prev_end:f_start]
+            prof_block = m.group(4).strip()
+            sino_block = m.group(5).strip().upper()
 
-        rut_pac_matches = list(re.finditer(r'(\d{6,8}-[\dkK])', before_text))
-        if rut_pac_matches:
-            last_rut_pac = rut_pac_matches[-1]
-            rut_pac = last_rut_pac.group(1).upper()
-            nom_pac = clean_text_spaces(before_text[last_rut_pac.end():])
-        else:
-            rut_pac = ""
-            nom_pac = clean_text_spaces(before_text)
+            nom_prof = ""
+            rut_prof = ""
 
-        # 2. TEXTO DESPUÉS DE LA FECHA (Contiene Profesional, RUT Profesional y respuestas SI/NO)
-        next_start = date_matches[idx+1].start() if idx + 1 < len(date_matches) else len(raw_text)
-        after_text = raw_text[f_end:next_start]
+            if "NO REGISTRADO" in prof_block.upper() or "NOREGISTRADO" in prof_block.upper():
+                nom_prof = "NO REGISTRADO"
+                rut_prof = "NO REGISTRADO"
+            else:
+                rut_prof_match = re.search(r'(\d{6,8}-[\dkK])', prof_block)
+                if rut_prof_match:
+                    rut_prof = rut_prof_match.group(1).upper()
+                    nom_prof = clean_text_spaces(prof_block[:rut_prof_match.start()])
+                else:
+                    nom_prof = clean_text_spaces(prof_block)
+                    rut_prof = "NO REGISTRADO" if not nom_prof else ""
 
-        rut_prof_matches = list(re.finditer(r'(\d{6,8}-[\dkK])', after_text))
+            sino_list = [s.upper() for s in re.findall(r'(SI|NO)', sino_block, re.IGNORECASE)]
 
-        if rut_prof_matches:
-            first_prof_rut = rut_prof_matches[0]
-            rut_prof = first_prof_rut.group(1).upper()
-            nom_prof = clean_text_spaces(after_text[:first_prof_rut.start()])
-            sino_text = after_text[first_prof_rut.end():]
-        else:
-            nom_prof = "NO REGISTRADO"
-            rut_prof = "NO REGISTRADO"
-            sino_text = after_text
+            def get_sino_item(idx, default="SI"):
+                if idx < len(sino_list):
+                    return sino_list[idx]
+                return default
 
-        # Extraer respuestas SI / NO
-        all_sino = re.findall(r'(SI|NO)', sino_text, re.IGNORECASE)
-        sino_list = [s.upper() for s in all_sino[-10:]] if len(all_sino) >= 10 else [s.upper() for s in all_sino]
-
-        def get_sino_item(i_idx, default="SI"):
-            if i_idx < len(sino_list):
-                return sino_list[i_idx]
-            return default
-
-        num_pauta = count + 1
-        st.session_state.reg12_data[num_pauta] = {
-            "rut_pac": rut_pac,
-            "nom_pac": nom_pac,
-            "fecha_diag": fecha_diag,
-            "nom_prof": nom_prof if nom_prof else "NO REGISTRADO",
-            "rut_prof": rut_prof if rut_prof else "NO REGISTRADO",
-            "motivo": get_sino_item(0),
-            "patologias": get_sino_item(1),
-            "medicamentos": get_sino_item(2),
-            "alergias": get_sino_item(3),
-            "extraoral": get_sino_item(4),
-            "intraoral": get_sino_item(5),
-            "diagnostico": get_sino_item(6),
-            "plan": get_sino_item(7),
-            "pronostico": get_sino_item(8),
-            "cumple": get_sino_item(9)
-        }
-        count += 1
+            num_pauta = count + 1
+            st.session_state.reg12_data[num_pauta] = {
+                "rut_pac": rut_pac,
+                "nom_pac": nom_pac,
+                "fecha_diag": fecha_diag,
+                "nom_prof": nom_prof if nom_prof else "NO REGISTRADO",
+                "rut_prof": rut_prof if rut_prof else "NO REGISTRADO",
+                "motivo": get_sino_item(0),
+                "patologias": get_sino_item(1),
+                "medicamentos": get_sino_item(2),
+                "alergias": get_sino_item(3),
+                "extraoral": get_sino_item(4),
+                "intraoral": get_sino_item(5),
+                "diagnostico": get_sino_item(6),
+                "plan": get_sino_item(7),
+                "pronostico": get_sino_item(8),
+                "cumple": get_sino_item(9)
+            }
+            count += 1
 
     return count
 
@@ -553,7 +546,7 @@ def generar_excel_higiene_manos(higiene_dict, centro, mes, responsable):
     return output
 
 
-# --- EXCEL 3: CONSOLIDADO REG 1.2 AO (REGISTROS MÍNIMOS EN FICHA CLÍNICA) ---
+# --- EXCEL 3: CONSOLIDADO REG 1.2 AO ---
 def generar_excel_reg12(reg_dict, centro, ano, mes, grupo, especialidad):
     wb = Workbook()
     ws = wb.active
@@ -1091,7 +1084,7 @@ elif st.session_state.pagina_activa == "pauta_reg12":
     m_med = st.radio("Medicamentos", ["SI", "NO"], index=0 if datos_r.get('medicamentos') != "NO" else 1, key=f"r_med_{r_num}")
     m_ale = st.radio("Alergias", ["SI", "NO"], index=0 if datos_r.get('alergias') != "NO" else 1, key=f"r_ale_{r_num}")
 
-    st.markdown("*Exámenes Fisicos*")
+    st.markdown("*Exámenes Físicos*")
     m_ext = st.radio("1.2. Examen Extraoral", ["SI", "NO"], index=0 if datos_r.get('extraoral') != "NO" else 1, key=f"r_ext_{r_num}")
     m_int = st.radio("1.3. Examen Intraoral", ["SI", "NO"], index=0 if datos_r.get('intraoral') != "NO" else 1, key=f"r_int_{r_num}")
 
